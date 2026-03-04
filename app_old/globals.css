@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+/* Força modo claro enquanto você está construindo o MVP */
+:root {
+  color-scheme: light;
+}
