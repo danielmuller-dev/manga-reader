@@ -4,6 +4,9 @@ import ContinueReading from "./ContinueReading";
 import DeleteChapterButton from "./DeleteChapterButton";
 import FavoriteButton from "./FavoriteButton";
 
+type TagItem = { id: string; slug: string; name: string };
+type WorkTagRow = { tag: TagItem };
+
 export default async function WorkPage({
   params,
 }: {
@@ -57,7 +60,9 @@ export default async function WorkPage({
     );
   }
 
-  const tags = work.tags
+  const tagRows = (work.tags as unknown as WorkTagRow[]) ?? [];
+
+  const tags = tagRows
     .map((t) => t.tag)
     .sort((a, b) => a.name.localeCompare(b.name));
 
