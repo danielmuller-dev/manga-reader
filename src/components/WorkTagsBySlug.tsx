@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+type TagItem = { id: string; slug: string; name: string };
+type WorkTagRow = { tag: TagItem };
+
 export default async function WorkTagsBySlug({ slug }: { slug: string }) {
   const work = await prisma.work.findUnique({
     where: { slug },
@@ -16,7 +19,10 @@ export default async function WorkTagsBySlug({ slug }: { slug: string }) {
 
   if (!work) return null;
 
-  const tags = work.tags.map((t) => t.tag).sort((a, b) => a.name.localeCompare(b.name));
+  const tagRows: WorkTagRow[] = (work.tags as unknown as WorkTagRow[]) ?? [];
+  const tags = tagRows
+    .map((t) => t.tag)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   if (tags.length === 0) return null;
 
