@@ -14,6 +14,11 @@ type MemberScanlatorCard = BaseScanlatorCard & {
   memberRole: "OWNER" | "EDITOR";
 };
 
+type MembershipRow = {
+  role: "OWNER" | "EDITOR";
+  scanlator: BaseScanlatorCard;
+};
+
 export default async function ScanlatorsPage() {
   const auth = await requireRole(["ADMIN", "SCAN"]);
 
@@ -84,11 +89,7 @@ export default async function ScanlatorsPage() {
                     <div className="h-12 w-12 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
                       {s.logoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={s.logoUrl}
-                          alt={s.name}
-                          className="h-full w-full object-cover"
-                        />
+                        <img src={s.logoUrl} alt={s.name} className="h-full w-full object-cover" />
                       ) : (
                         <span className="text-xs text-gray-500">LOGO</span>
                       )}
@@ -117,7 +118,7 @@ export default async function ScanlatorsPage() {
   }
 
   // ✅ SCAN: vê apenas os que ele pertence
-  const memberships = await prisma.scanlatorMember.findMany({
+  const memberships: MembershipRow[] = await prisma.scanlatorMember.findMany({
     where: { userId: me.id },
     orderBy: { createdAt: "desc" },
     select: {
@@ -166,11 +167,7 @@ export default async function ScanlatorsPage() {
                   <div className="h-12 w-12 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
                     {s.logoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={s.logoUrl}
-                        alt={s.name}
-                        className="h-full w-full object-cover"
-                      />
+                      <img src={s.logoUrl} alt={s.name} className="h-full w-full object-cover" />
                     ) : (
                       <span className="text-xs text-gray-500">LOGO</span>
                     )}
