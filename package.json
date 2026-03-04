@@ -21,7 +21,8 @@
     "pg": "^8.19.0",
     "prisma": "^7.4.2",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "tsx": "^4.20.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -34,7 +35,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "tsx": "^4.20.5",
     "typescript": "^5"
   }
 }
