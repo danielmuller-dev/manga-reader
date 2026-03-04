@@ -7,6 +7,15 @@ import FavoriteButton from "./FavoriteButton";
 type TagItem = { id: string; slug: string; name: string };
 type WorkTagRow = { tag: TagItem };
 
+type ChapterRow = {
+  id: string;
+  number: number | null;
+  title: string | null;
+  kind: string;
+  readMode: string | null;
+  createdAt: Date;
+};
+
 export default async function WorkPage({
   params,
 }: {
@@ -60,7 +69,8 @@ export default async function WorkPage({
     );
   }
 
-  const tagRows = (work.tags as unknown as WorkTagRow[]) ?? [];
+  const tagRows: WorkTagRow[] = (work.tags as unknown as WorkTagRow[]) ?? [];
+  const chapterRows: ChapterRow[] = (work.chapters as unknown as ChapterRow[]) ?? [];
 
   const tags = tagRows
     .map((t) => t.tag)
@@ -142,17 +152,17 @@ export default async function WorkPage({
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Capítulos</h2>
             <span className="text-sm opacity-70">
-              {work.chapters.length} capítulo(s)
+              {chapterRows.length} capítulo(s)
             </span>
           </div>
 
-          {work.chapters.length === 0 ? (
+          {chapterRows.length === 0 ? (
             <p className="text-sm opacity-70">
               Nenhum capítulo ainda. Clique em “Adicionar capítulo”.
             </p>
           ) : (
             <ul className="space-y-2">
-              {work.chapters.map((c) => {
+              {chapterRows.map((c) => {
                 const label =
                   c.number != null
                     ? `Cap. ${c.number}${c.title ? ` — ${c.title}` : ""}`
