@@ -1,13 +1,42 @@
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
-import { ProgressMode } from "@prisma/client";
+import { NextRequest } from "next/server";
+
+type ProgressModeValue = "SCROLL" | "PAGINATED";
 
 async function getUserId() {
   const store = await cookies();
   return store.get("userId")?.value || null;
 }
 
-export async function GET(req: Request) {
+function toMode(value: unknown): ProgressModeValue | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim().toUpperCase();
+  if (v === "SCROLL" || v === "PAGINATED") return v;
+  return null;
+}
+
+type SaveBody = {
+  workId?: unknown;
+  chapterId?: unknown;
+  mode?: unknown;
+  pageIndex?: unknown;
+  scrollY?: unknown;
+};
+
+function toId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const s = value.trim();
+  return s.length ? s : null;
+}
+
+function toNullableInt(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.trunc(value);
+}
+
+export async function GET(req: NextRequest) {
   try {
     const userId = await getUserId();
     if (!userId) return Response.json({ progress: null });
@@ -35,32 +64,33 @@ export async function GET(req: Request) {
   }
 }
 
-type SaveBody = {
-  workId: string;
-  chapterId: string;
-  mode: ProgressMode;
-  pageIndex?: number | null;
-  scrollY?: number | null;
-};
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const userId = await getUserId();
     if (!userId) return Response.json({ error: "Não autenticado." }, { status: 401 });
 
-    const body = (await req.json().catch(() => ({}))) as Partial<SaveBody>;
+    let raw: unknown;
+    try {
+      raw = await req.json();
+    } catch {
+      return Response.json({ error: "JSON inválido." }, { status: 400 });
+    }
 
-    const workId = String(body.workId || "");
-    const chapterId = String(body.chapterId || "");
-    const mode = body.mode;
+    const body = raw as SaveBody;
+
+    const workId = toId(body.workId);
+    const chapterId = toId(body.chapterId);
+    const mode = toMode(body.mode);
 
     if (!workId || !chapterId || !mode) {
-      return Response.json({ error: "workId, chapterId e mode são obrigatórios." }, { status: 400 });
+      return Response.json(
+        { error: "workId, chapterId e mode são obrigatórios." },
+        { status: 400 }
+      );
     }
 
-    if (!Object.values(ProgressMode).includes(mode)) {
-      return Response.json({ error: "mode inválido." }, { status: 400 });
-    }
+    const pageIndex = toNullableInt(body.pageIndex);
+    const scrollY = toNullableInt(body.scrollY);
 
     const progress = await prisma.readingProgress.upsert({
       where: { userId_workId: { userId, workId } },
@@ -69,16 +99,23 @@ export async function POST(req: Request) {
         workId,
         chapterId,
         mode,
-        pageIndex: body.pageIndex ?? null,
-        scrollY: body.scrollY ?? null,
+        pageIndex,
+        scrollY,
       },
       update: {
         chapterId,
         mode,
-        pageIndex: body.pageIndex ?? null,
-        scrollY: body.scrollY ?? null,
+        pageIndex,
+        scrollY,
       },
-      select: { workId: true, chapterId: true, mode: true, pageIndex: true, scrollY: true, updatedAt: true },
+      select: {
+        workId: true,
+        chapterId: true,
+        mode: true,
+        pageIndex: true,
+        scrollY: true,
+        updatedAt: true,
+      },
     });
 
     return Response.json({ progress }, { status: 200 });
