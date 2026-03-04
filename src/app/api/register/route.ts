@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { UserRole } from "@prisma/client";
+
+type UserRole = "USER" | "SCAN" | "ADMIN";
 
 type Body = { email: string; password: string; nickname: string };
 
@@ -8,13 +9,18 @@ function normalizeNickname(n: string) {
   return n.trim();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => ({}))) as Partial<Body>;
+    const raw: unknown = await req.json().catch(() => ({}));
+    const body: Record<string, unknown> = isRecord(raw) ? raw : {};
 
-    const email = String(body.email || "").trim().toLowerCase();
-    const password = String(body.password || "");
-    const nickname = normalizeNickname(String(body.nickname || ""));
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const password = String(body.password ?? "");
+    const nickname = normalizeNickname(String(body.nickname ?? ""));
 
     if (!email || !password || !nickname) {
       return Response.json(
@@ -70,11 +76,13 @@ export async function POST(req: Request) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const role: UserRole = "USER";
+
     const user = await prisma.user.create({
       data: {
         email,
         passwordHash,
-        role: UserRole.USER,
+        role,
         name: nickname, // ✅ NickName salvo no campo name
       },
       select: { id: true, email: true, name: true, role: true, createdAt: true },
