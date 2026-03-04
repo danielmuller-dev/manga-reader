@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 
+type Role = "USER" | "SCAN" | "ADMIN";
+
 function authStatus(auth: { user: { id: string } | null }) {
-  // não logado -> 401, logado sem permissão -> 403
   return auth.user === null ? 401 : 403;
 }
 
@@ -19,10 +19,11 @@ function toId(value: unknown): string | null {
   return s.length ? s : null;
 }
 
-function toUserRole(value: unknown): UserRole | null {
+function toRole(value: unknown): Role | null {
   if (typeof value !== "string") return null;
   const v = value.trim().toUpperCase();
-  return Object.values(UserRole).includes(v as UserRole) ? (v as UserRole) : null;
+  if (v === "USER" || v === "SCAN" || v === "ADMIN") return v;
+  return null;
 }
 
 export async function GET(_req: NextRequest) {
@@ -67,14 +68,14 @@ export async function POST(req: NextRequest) {
 
   const body = raw as PostBody;
   const userId = toId(body.userId);
-  const role = toUserRole(body.role);
+  const role = toRole(body.role);
 
   if (!userId || !role) {
     return Response.json({ error: "userId e role são obrigatórios." }, { status: 400 });
   }
 
   // evita o admin se “remover” do próprio admin sem querer
-  if (auth.user.id === userId && role !== UserRole.ADMIN) {
+  if (auth.user.id === userId && role !== "ADMIN") {
     return Response.json({ error: "Você não pode remover seu próprio ADMIN." }, { status: 400 });
   }
 
