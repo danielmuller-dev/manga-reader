@@ -1,12 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
+import { NextRequest } from "next/server";
 
 async function getUserId() {
   const store = await cookies();
   return store.get("userId")?.value || null;
 }
 
-export async function GET() {
+type FavoriteRow = {
+  work: {
+    id: string;
+    slug: string;
+    title: string;
+    type: "MANGA" | "MANHWA" | "MANHUA" | "WEBTOON" | "NOVEL";
+    coverUrl: string | null;
+  };
+};
+
+export async function GET(_req: NextRequest) {
   try {
     const userId = await getUserId();
 
@@ -54,7 +65,7 @@ export async function GET() {
         })
       : [];
 
-    const favorites = userId
+    const favorites: FavoriteRow[] = userId
       ? await prisma.favorite.findMany({
           where: { userId },
           orderBy: { createdAt: "desc" },
