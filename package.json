@@ -6,7 +6,7 @@
     "dev": "next dev --webpack",
     "postinstall": "prisma generate",
     "seed": "tsx prisma/seed.ts",
-    "build": "prisma generate && prisma migrate deploy && pnpm -s seed && next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint"
   },
