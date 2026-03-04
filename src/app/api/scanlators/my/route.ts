@@ -1,13 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { requireScanOrAdmin } from "@/lib/scanlators";
-import type { Prisma } from "@prisma/client";
 
-type Membership = Prisma.ScanlatorMemberGetPayload<{
-  select: {
-    role: true;
-    scanlator: { select: { id: true; name: true; slug: true; logoUrl: true } };
-  };
-}>;
+type ScanlatorLite = {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+};
+
+type Membership = {
+  role: string;
+  scanlator: ScanlatorLite;
+};
 
 export async function GET() {
   const auth = await requireScanOrAdmin();
@@ -18,19 +22,20 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       select: { id: true, name: true, slug: true, logoUrl: true },
     });
+
     return Response.json({ scanlators });
   }
 
-  const memberships: Membership[] = await prisma.scanlatorMember.findMany({
+  const memberships = (await prisma.scanlatorMember.findMany({
     where: { userId: auth.user.id },
     orderBy: { createdAt: "desc" },
     select: {
       role: true,
       scanlator: { select: { id: true, name: true, slug: true, logoUrl: true } },
     },
-  });
+  })) as unknown as Membership[];
 
-  const scanlators = memberships.map((m) => ({
+  const scanlators = memberships.map((m: Membership) => ({
     ...m.scanlator,
     memberRole: m.role,
   }));
