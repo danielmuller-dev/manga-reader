@@ -3,8 +3,14 @@ import { requireScanlatorAccessBySlug } from "@/lib/scanlators";
 import { prisma } from "@/lib/prisma";
 import ScanlatorDashboardClient from "./ScanlatorDashboardClient";
 
-export default async function ScanlatorDashboardPage({ params }: { params: { slug: string } }) {
-  const auth = await requireScanlatorAccessBySlug(params.slug);
+export default async function ScanlatorDashboardPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+
+  const auth = await requireScanlatorAccessBySlug(slug);
 
   if (!auth.ok) {
     const message =

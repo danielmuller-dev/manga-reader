@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import ContinueReading from "./ContinueReading";
 import DeleteChapterButton from "./DeleteChapterButton";
 import FavoriteButton from "./FavoriteButton";
+import { cookies } from "next/headers";
 
 type TagItem = { id: string; slug: string; name: string };
 type WorkTagRow = { tag: TagItem };
@@ -15,6 +16,13 @@ type ChapterRow = {
   readMode: string | null;
   createdAt: Date;
 };
+
+type UserRole = "USER" | "SCAN" | "ADMIN";
+
+async function getUserId(): Promise<string | null> {
+  const store = await cookies();
+  return store.get("userId")?.value || null;
+}
 
 export default async function WorkPage({
   params,
@@ -32,8 +40,6 @@ export default async function WorkPage({
       type: true,
       description: true,
       coverUrl: true,
-
-      // ✅ Tags (WorkTag -> Tag)
       tags: {
         select: {
           tag: {
@@ -41,7 +47,6 @@ export default async function WorkPage({
           },
         },
       },
-
       chapters: {
         orderBy: [{ number: "desc" }, { createdAt: "desc" }],
         select: {
@@ -70,15 +75,33 @@ export default async function WorkPage({
   }
 
   const tagRows: WorkTagRow[] = (work.tags as unknown as WorkTagRow[]) ?? [];
-  const chapterRows: ChapterRow[] = (work.chapters as unknown as ChapterRow[]) ?? [];
+  const chapterRows: ChapterRow[] =
+    (work.chapters as unknown as ChapterRow[]) ?? [];
 
   const tags = tagRows
     .map((t) => t.tag)
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // 🔐 Permissão
+  const userId = await getUserId();
+
+  let role: UserRole | null = null;
+
+  if (userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    role = (user?.role as UserRole | undefined) ?? null;
+  }
+
+  const canManageChapters = role === "ADMIN" || role === "SCAN";
+
   return (
     <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
       <div className="max-w-3xl mx-auto space-y-4">
+
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -86,21 +109,19 @@ export default async function WorkPage({
             <h1 className="text-3xl font-semibold">{work.title}</h1>
             <div className="text-sm opacity-70">/{work.slug}</div>
 
-            {/* ✅ Tags (chips clicáveis) */}
-            {tags.length > 0 ? (
+            {tags.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {tags.map((t) => (
                   <Link
                     key={t.id}
                     href={`/search?tag=${encodeURIComponent(t.slug)}&page=1`}
                     className="rounded-full border bg-white px-3 py-1 text-xs hover:bg-gray-50"
-                    title={`Buscar por #${t.name}`}
                   >
                     #{t.name}
                   </Link>
                 ))}
               </div>
-            ) : null}
+            )}
           </div>
 
           <Link className="underline" href="/works">
@@ -112,12 +133,14 @@ export default async function WorkPage({
         <div className="flex flex-wrap items-center gap-2">
           <ContinueReading workId={work.id} />
 
-          <Link
-            href={`/works/${work.slug}/chapters/new`}
-            className="inline-block rounded-md border bg-white px-3 py-2 hover:bg-gray-50"
-          >
-            Adicionar capítulo
-          </Link>
+          {canManageChapters && (
+            <Link
+              href={`/works/${work.slug}/chapters/new`}
+              className="inline-block rounded-md border bg-white px-3 py-2 hover:bg-gray-50"
+            >
+              Adicionar capítulo
+            </Link>
+          )}
 
           <FavoriteButton workId={work.id} />
         </div>
@@ -141,13 +164,13 @@ export default async function WorkPage({
             <div className="flex-1 space-y-2">
               <div className="text-sm font-medium">Descrição</div>
               <p className="text-sm opacity-80">
-                {work.description ? work.description : "Sem descrição."}
+                {work.description || "Sem descrição."}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Chapters */}
+        {/* Capítulos */}
         <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Capítulos</h2>
@@ -158,7 +181,8 @@ export default async function WorkPage({
 
           {chapterRows.length === 0 ? (
             <p className="text-sm opacity-70">
-              Nenhum capítulo ainda. Clique em “Adicionar capítulo”.
+              Nenhum capítulo ainda.
+              {canManageChapters && " Clique em “Adicionar capítulo”."}
             </p>
           ) : (
             <ul className="space-y-2">
@@ -191,7 +215,9 @@ export default async function WorkPage({
                         Ler
                       </Link>
 
-                      <DeleteChapterButton chapterId={c.id} />
+                      {canManageChapters && (
+                        <DeleteChapterButton chapterId={c.id} />
+                      )}
                     </div>
                   </li>
                 );

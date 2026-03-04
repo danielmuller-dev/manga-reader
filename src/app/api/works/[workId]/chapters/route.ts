@@ -22,6 +22,9 @@ type CreateBody = {
   readMode?: ReadMode | null;
   textContent?: string | null;
   pages?: string[] | null;
+
+  // ✅ novo: quando for SCAN, pode escolher qual scan está postando
+  scanlatorId?: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -59,7 +62,36 @@ function readStringArray(value: unknown): string[] | null {
   return arr;
 }
 
-export async function GET(_req: NextRequest, ctx: { params: Params | Promise<Params> }) {
+async function getAllowedScanlatorsForWork(opts: {
+  userId: string;
+  workId: string;
+}): Promise<{ id: string; slug: string; name: string }[]> {
+  // Scanlators onde o user é membro e que estão vinculadas à obra
+  const rows = await prisma.workScanlator.findMany({
+    where: {
+      workId: opts.workId,
+      scanlator: {
+        members: {
+          some: {
+            userId: opts.userId,
+          },
+        },
+      },
+    },
+    select: {
+      scanlator: {
+        select: { id: true, slug: true, name: true },
+      },
+    },
+  });
+
+  return rows.map((r) => r.scanlator);
+}
+
+export async function GET(
+  _req: NextRequest,
+  ctx: { params: Params | Promise<Params> }
+) {
   const { workId } = await getParams(ctx);
 
   const chapters = await prisma.chapter.findMany({
@@ -78,9 +110,16 @@ export async function GET(_req: NextRequest, ctx: { params: Params | Promise<Par
   return Response.json({ chapters });
 }
 
-export async function POST(req: NextRequest, ctx: { params: Params | Promise<Params> }) {
+export async function POST(
+  req: NextRequest,
+  ctx: { params: Params | Promise<Params> }
+) {
   const auth = await requireRole(["SCAN", "ADMIN"]);
-  if (!auth.ok) return Response.json({ error: auth.error }, { status: authStatus(auth) });
+  if (!auth.ok) {
+    return Response.json({ error: auth.error }, { status: authStatus(auth) });
+  }
+
+  const { workId } = await getParams(ctx);
 
   let bodyRaw: unknown;
   try {
@@ -98,11 +137,10 @@ export async function POST(req: NextRequest, ctx: { params: Params | Promise<Par
     readMode: parseReadMode(bodyObj.readMode),
     textContent: readNullableString(bodyObj.textContent),
     pages: readStringArray(bodyObj.pages),
+    scanlatorId: readNullableString(bodyObj.scanlatorId),
   };
 
   try {
-    const { workId } = await getParams(ctx);
-
     const kind = body.kind;
     if (!kind) {
       return Response.json({ error: "kind inválido." }, { status: 400 });
@@ -128,6 +166,48 @@ export async function POST(req: NextRequest, ctx: { params: Params | Promise<Par
       }
     }
 
+    // ✅ Permissão por obra:
+    // - ADMIN: pode sempre
+    // - SCAN: precisa ser membro de alguma scanlator vinculada à obra
+    let scanlatorIdToSet: string | null = null;
+
+    if (auth.user.role === "SCAN") {
+      const allowed = await getAllowedScanlatorsForWork({
+        userId: auth.user.id,
+        workId,
+      });
+
+      if (allowed.length === 0) {
+        return Response.json(
+          {
+            error:
+              "Sem permissão: sua conta SCAN não pertence a nenhuma scanlator vinculada a esta obra.",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (body.scanlatorId) {
+        const ok = allowed.some((s) => s.id === body.scanlatorId);
+        if (!ok) {
+          return Response.json(
+            {
+              error:
+                "scanlatorId inválido: você não é membro dessa scanlator para esta obra.",
+            },
+            { status: 403 }
+          );
+        }
+        scanlatorIdToSet = body.scanlatorId;
+      } else {
+        // fallback: pega a primeira vinculada
+        scanlatorIdToSet = allowed[0].id;
+      }
+    } else {
+      // ADMIN pode setar ou deixar null
+      scanlatorIdToSet = body.scanlatorId ?? null;
+    }
+
     const chapter = await prisma.chapter.create({
       data: {
         workId,
@@ -135,6 +215,10 @@ export async function POST(req: NextRequest, ctx: { params: Params | Promise<Par
         title: body.title ?? null,
         kind,
         readMode: kind === "IMAGES" ? (body.readMode ?? "SCROLL") : null,
+
+        // ✅ auditoria
+        uploadedById: auth.user.id,
+        scanlatorId: scanlatorIdToSet,
 
         text:
           kind === "TEXT"
