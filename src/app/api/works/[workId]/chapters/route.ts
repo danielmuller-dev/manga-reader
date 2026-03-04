@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { ChapterKind, ReadMode } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 type Params = { workId: string };
@@ -11,6 +10,53 @@ async function getParams(ctx: { params: Params | Promise<Params> }) {
 
 function authStatus(auth: { user: { id: string } | null }) {
   return auth.user === null ? 401 : 403;
+}
+
+type ChapterKind = "IMAGES" | "TEXT";
+type ReadMode = "SCROLL" | "PAGINATED";
+
+type CreateBody = {
+  number?: number | null;
+  title?: string | null;
+  kind?: ChapterKind;
+  readMode?: ReadMode | null;
+  textContent?: string | null;
+  pages?: string[] | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseKind(value: unknown): ChapterKind | null {
+  return value === "IMAGES" || value === "TEXT" ? value : null;
+}
+
+function parseReadMode(value: unknown): ReadMode | null {
+  return value === "SCROLL" || value === "PAGINATED" ? value : null;
+}
+
+function readNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function readNullableString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const s = String(value);
+  return s === "" ? null : s;
+}
+
+function readStringArray(value: unknown): string[] | null {
+  if (value === null) return null;
+  if (!Array.isArray(value)) return null;
+  const arr = value.map((v) => String(v)).map((s) => s.trim()).filter(Boolean);
+  return arr;
 }
 
 export async function GET(_req: NextRequest, ctx: { params: Params | Promise<Params> }) {
@@ -32,15 +78,6 @@ export async function GET(_req: NextRequest, ctx: { params: Params | Promise<Par
   return Response.json({ chapters });
 }
 
-type CreateBody = {
-  number?: number | null;
-  title?: string | null;
-  kind?: ChapterKind;
-  readMode?: ReadMode | null;
-  textContent?: string | null;
-  pages?: string[] | null;
-};
-
 export async function POST(req: NextRequest, ctx: { params: Params | Promise<Params> }) {
   const auth = await requireRole(["SCAN", "ADMIN"]);
   if (!auth.ok) return Response.json({ error: auth.error }, { status: authStatus(auth) });
@@ -52,18 +89,27 @@ export async function POST(req: NextRequest, ctx: { params: Params | Promise<Par
     return Response.json({ error: "JSON inválido." }, { status: 400 });
   }
 
-  const body = bodyRaw as CreateBody;
+  const bodyObj: Record<string, unknown> = isRecord(bodyRaw) ? bodyRaw : {};
+
+  const body: CreateBody = {
+    number: readNullableNumber(bodyObj.number),
+    title: readNullableString(bodyObj.title),
+    kind: parseKind(bodyObj.kind) ?? undefined,
+    readMode: parseReadMode(bodyObj.readMode),
+    textContent: readNullableString(bodyObj.textContent),
+    pages: readStringArray(bodyObj.pages),
+  };
 
   try {
     const { workId } = await getParams(ctx);
 
     const kind = body.kind;
-    if (!kind || !Object.values(ChapterKind).includes(kind)) {
+    if (!kind) {
       return Response.json({ error: "kind inválido." }, { status: 400 });
     }
 
     if (kind === "IMAGES") {
-      const pages = Array.isArray(body.pages) ? body.pages.map(String).filter(Boolean) : [];
+      const pages = Array.isArray(body.pages) ? body.pages : [];
       if (pages.length === 0) {
         return Response.json(
           { error: "Envie pages (array de URLs) com pelo menos 1 item." },
@@ -75,7 +121,10 @@ export async function POST(req: NextRequest, ctx: { params: Params | Promise<Par
     if (kind === "TEXT") {
       const text = String(body.textContent ?? "").trim();
       if (!text) {
-        return Response.json({ error: "Envie textContent com o texto do capítulo." }, { status: 400 });
+        return Response.json(
+          { error: "Envie textContent com o texto do capítulo." },
+          { status: 400 }
+        );
       }
     }
 
@@ -85,7 +134,7 @@ export async function POST(req: NextRequest, ctx: { params: Params | Promise<Par
         number: body.number ?? null,
         title: body.title ?? null,
         kind,
-        readMode: kind === "IMAGES" ? (body.readMode ?? ReadMode.SCROLL) : null,
+        readMode: kind === "IMAGES" ? (body.readMode ?? "SCROLL") : null,
 
         text:
           kind === "TEXT"
@@ -108,6 +157,9 @@ export async function POST(req: NextRequest, ctx: { params: Params | Promise<Par
     return Response.json({ chapter }, { status: 201 });
   } catch (err) {
     console.error("Erro ao criar capítulo:", err);
-    return Response.json({ error: "Erro interno ao criar capítulo. Veja o terminal." }, { status: 500 });
+    return Response.json(
+      { error: "Erro interno ao criar capítulo. Veja o terminal." },
+      { status: 500 }
+    );
   }
 }
