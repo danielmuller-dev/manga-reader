@@ -15,13 +15,27 @@ function json(data: unknown, init?: ResponseInit) {
   });
 }
 
+type TagItem = { id: string; slug: string; name: string };
+type Row = { tag: TagItem };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+async function readTagId(req: Request): Promise<string> {
+  const raw: unknown = await req.json().catch(() => null);
+  if (!isRecord(raw)) return "";
+  const tagId = raw.tagId;
+  return typeof tagId === "string" ? tagId : "";
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ workId: string }> }
 ) {
   const { workId } = await params;
 
-  const rows = await prisma.workTag.findMany({
+  const rows: Row[] = await prisma.workTag.findMany({
     where: { workId },
     select: {
       tag: { select: { id: true, slug: true, name: true } },
@@ -41,9 +55,7 @@ export async function POST(
 
   const { workId } = await params;
 
-  const body = (await req.json().catch(() => null)) as { tagId?: unknown } | null;
-  const tagId = typeof body?.tagId === "string" ? body.tagId : "";
-
+  const tagId = await readTagId(req);
   if (!tagId) return json({ error: "tagId é obrigatório" }, { status: 400 });
 
   // valida work e tag existirem
@@ -63,7 +75,7 @@ export async function POST(
     // já existe
   }
 
-  const rows = await prisma.workTag.findMany({
+  const rows: Row[] = await prisma.workTag.findMany({
     where: { workId },
     select: { tag: { select: { id: true, slug: true, name: true } } },
     orderBy: { tag: { name: "asc" } },
@@ -81,16 +93,14 @@ export async function DELETE(
 
   const { workId } = await params;
 
-  const body = (await req.json().catch(() => null)) as { tagId?: unknown } | null;
-  const tagId = typeof body?.tagId === "string" ? body.tagId : "";
-
+  const tagId = await readTagId(req);
   if (!tagId) return json({ error: "tagId é obrigatório" }, { status: 400 });
 
   await prisma.workTag.deleteMany({
     where: { workId, tagId },
   });
 
-  const rows = await prisma.workTag.findMany({
+  const rows: Row[] = await prisma.workTag.findMany({
     where: { workId },
     select: { tag: { select: { id: true, slug: true, name: true } } },
     orderBy: { tag: { name: "asc" } },
