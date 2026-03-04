@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { WorkType } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 type CreateBody = {
@@ -10,6 +9,10 @@ type CreateBody = {
   coverUrl?: unknown;
   type?: unknown;
 };
+
+type WorkType = "MANGA" | "MANHWA" | "MANHUA" | "NOVEL";
+
+const WORK_TYPES: readonly WorkType[] = ["MANGA", "MANHWA", "MANHUA", "NOVEL"] as const;
 
 function authStatus(auth: { user: { id: string } | null }) {
   return auth.user === null ? 401 : 403;
@@ -30,7 +33,7 @@ function toNullableString(value: unknown): string | null {
 function toWorkType(value: unknown): WorkType | null {
   if (typeof value !== "string") return null;
   const v = value.trim().toUpperCase();
-  return Object.values(WorkType).includes(v as WorkType) ? (v as WorkType) : null;
+  return (WORK_TYPES as readonly string[]).includes(v) ? (v as WorkType) : null;
 }
 
 export async function GET(_req: NextRequest) {
@@ -60,7 +63,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "JSON inválido." }, { status: 400 });
   }
 
-  const body = raw as CreateBody;
+  const body: CreateBody = (typeof raw === "object" && raw !== null ? (raw as CreateBody) : {});
 
   const slug = toTrimmedString(body.slug);
   const title = toTrimmedString(body.title);
