@@ -1,9 +1,12 @@
-import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
+import pkg from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const { PrismaClient } = pkg;
+
+type PrismaClientType = InstanceType<typeof PrismaClient>;
+
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClientType };
 
 // Pool do Postgres usando DATABASE_URL
 const pool = new Pool({
