@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/auth-server";
-import type { WorkType } from "@prisma/client";
+
+type WorkTypeValue = "MANGA" | "MANHWA" | "MANHUA" | "WEBTOON" | "NOVEL";
 
 type WorkRow = {
   id: string;
   title: string;
   slug: string;
-  type: WorkType;
+  type: WorkTypeValue;
   _count: { chapters: number };
 };
 
