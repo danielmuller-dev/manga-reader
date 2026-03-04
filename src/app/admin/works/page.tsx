@@ -1,6 +1,15 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/auth-server";
+import type { WorkType } from "@prisma/client";
+
+type WorkRow = {
+  id: string;
+  title: string;
+  slug: string;
+  type: WorkType;
+  _count: { chapters: number };
+};
 
 export default async function AdminWorksPage() {
   const auth = await requireRoles(["ADMIN", "SCAN"]);
@@ -13,7 +22,7 @@ export default async function AdminWorksPage() {
     );
   }
 
-  const works = await prisma.work.findMany({
+  const works: WorkRow[] = await prisma.work.findMany({
     select: {
       id: true,
       title: true,
@@ -30,15 +39,10 @@ export default async function AdminWorksPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Obras (Admin)</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Gerencie tags e navegue para a obra.
-          </p>
+          <p className="mt-2 text-sm text-gray-600">Gerencie tags e navegue para a obra.</p>
         </div>
 
-        <Link
-          className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          href="/admin/tags"
-        >
+        <Link className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50" href="/admin/tags">
           Gerenciar Tags
         </Link>
       </div>
