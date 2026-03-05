@@ -22,7 +22,13 @@ type ScanlatorDashboard = {
   works: {
     id: string;
     createdAt: string | Date;
-    work: { id: string; slug: string; title: string; coverUrl: string | null; type: string };
+    work: {
+      id: string;
+      slug: string;
+      title: string;
+      coverUrl: string | null;
+      type: string;
+    };
   }[];
   chapters: {
     id: string;
@@ -79,6 +85,8 @@ export default function ScanlatorDashboardClient({
     return `/api/scanlators/${encodeURIComponent(scanlator.slug)}/works`;
   }, [scanlator.slug]);
 
+  const firstLinkedWorkSlug = scanlator.works.length > 0 ? scanlator.works[0].work.slug : null;
+
   async function openAdminModal() {
     if (!isAdmin) return;
 
@@ -98,9 +106,9 @@ export default function ScanlatorDashboardClient({
         return;
       }
 
-      setAllWorks(Array.isArray(data?.works) ? data!.works : []);
+      setAllWorks(Array.isArray(data?.works) ? data.works : []);
       setLinkedWorkIds(
-        Array.isArray(data?.linkedWorkIds) ? data!.linkedWorkIds : linkedIdsFromServer
+        Array.isArray(data?.linkedWorkIds) ? data.linkedWorkIds : linkedIdsFromServer
       );
     } catch (e: unknown) {
       setAdminErr(e instanceof Error ? e.message : String(e));
@@ -236,12 +244,23 @@ export default function ScanlatorDashboardClient({
             </Link>
 
             <div className="flex gap-2">
-              <Link
-                href={`/scanlators/${scanlator.slug}/upload`}
-                className="rounded-md bg-gray-900 px-3 py-2 text-sm text-white hover:bg-gray-800"
-              >
-                Enviar capítulo
-              </Link>
+              {firstLinkedWorkSlug ? (
+                <Link
+                  href={`/works/${encodeURIComponent(firstLinkedWorkSlug)}/chapters/new`}
+                  className="rounded-md bg-gray-900 px-3 py-2 text-sm text-white hover:bg-gray-800"
+                >
+                  Enviar capítulo
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="rounded-md bg-gray-900 px-3 py-2 text-sm text-white opacity-50 cursor-not-allowed"
+                  disabled
+                  title="Vincule uma obra primeiro para enviar capítulos."
+                >
+                  Enviar capítulo
+                </button>
+              )}
 
               {isAdmin ? (
                 <Link
@@ -387,8 +406,9 @@ export default function ScanlatorDashboardClient({
                   ) : (
                     <ul className="divide-y">
                       {filteredWorks.map((w) => {
-                        const alreadyLinked =
-                          (linkedWorkIds.length ? linkedWorkIds : linkedIdsFromServer).includes(w.id);
+                        const alreadyLinked = (
+                          linkedWorkIds.length ? linkedWorkIds : linkedIdsFromServer
+                        ).includes(w.id);
 
                         return (
                           <li key={w.id} className="p-3 flex items-center justify-between gap-3">

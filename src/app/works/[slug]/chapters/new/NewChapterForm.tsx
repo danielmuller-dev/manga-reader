@@ -16,15 +16,20 @@ type CreateChapterPayload =
       title: string | null;
       readMode: ReadMode;
       pages: string[];
+      scanlatorId?: string | null;
     }
   | {
       kind: "TEXT";
       number: number | null;
       title: string | null;
       textContent: string;
+      scanlatorId?: string | null;
     };
 
 type UploadResponse = { urls: string[]; error?: string };
+
+type ScanlatorItem = { id: string; slug: string; name: string };
+type ScanlatorsResponse = { scanlators: ScanlatorItem[] } | { error: string };
 
 function toNullableNumber(value: string): number | null {
   const s = value.trim();
@@ -48,16 +53,35 @@ function parseUrlsFromTextarea(text: string): string[] {
 type UploadItem = {
   id: string;
   file: File;
-  previewUrl: string; // object URL
+  previewUrl: string;
 };
 
-function makeId() {
-  // simples e suficiente para lista local
+function makeId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function clamp(n: number, min: number, max: number) {
+function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
+}
+
+function moveInArray<T>(arr: T[], fromIndex: number, toIndex: number): T[] {
+  if (fromIndex === toIndex) return arr;
+  if (fromIndex < 0 || toIndex < 0) return arr;
+  if (fromIndex >= arr.length || toIndex >= arr.length) return arr;
+
+  const copy = [...arr];
+  const [moved] = copy.splice(fromIndex, 1);
+  copy.splice(toIndex, 0, moved);
+  return copy;
+}
+
+async function readJsonSafe<T>(res: Response): Promise<T | null> {
+  try {
+    const data = (await res.json()) as T;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 export default function NewChapterForm({
@@ -77,15 +101,15 @@ export default function NewChapterForm({
   const [title, setTitle] = useState<string>("");
 
   // Fallback (URLs coladas)
-  const [pagesText, setPagesText] = useState<string>(""); // 1 URL por linha
+  const [pagesText, setPagesText] = useState<string>("");
 
   // Upload Blob
   const [items, setItems] = useState<UploadItem[]>([]);
   const [uploading, setUploading] = useState<boolean>(false);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<number>(0); // 0..100
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
-  // DnD reorder state
+  // DnD reorder state (items e uploadedUrls)
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);
 
@@ -94,6 +118,11 @@ export default function NewChapterForm({
 
   // Novel
   const [novelText, setNovelText] = useState<string>("");
+
+  // ✅ scanlators permitidas para esta obra (se retornar, mostramos o select)
+  const [scanlators, setScanlators] = useState<ScanlatorItem[]>([]);
+  const [scanlatorId, setScanlatorId] = useState<string>(""); // "" = auto
+  const [scanlatorsLoaded, setScanlatorsLoaded] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -109,18 +138,66 @@ export default function NewChapterForm({
     return parseUrlsFromTextarea(pagesText).length;
   }, [kind, uploadedUrls, items.length, pagesText]);
 
-  // Cleanup object URLs on unmount or when items change
+  const showScanlatorSelect = scanlatorsLoaded && scanlators.length > 0;
+
+  // Carrega scanlators permitidas para essa obra (SCAN/ADMIN)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const res = await fetch(`/api/works/${workId}/scanlators`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        const data = await readJsonSafe<ScanlatorsResponse>(res);
+
+        if (cancelled) return;
+
+        if (!res.ok || !data) {
+          setScanlators([]);
+          setScanlatorsLoaded(true);
+          return;
+        }
+
+        if ("error" in data) {
+          setScanlators([]);
+          setScanlatorsLoaded(true);
+          return;
+        }
+
+        const list = Array.isArray(data.scanlators) ? data.scanlators : [];
+        setScanlators(list);
+        setScanlatorsLoaded(true);
+
+        // Se tiver só 1, já seleciona automaticamente (evita scan errada)
+        if (list.length === 1) {
+          setScanlatorId(list[0].id);
+        }
+      } catch {
+        if (cancelled) return;
+        setScanlators([]);
+        setScanlatorsLoaded(true);
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workId]);
+
+  // Cleanup object URLs on unmount
   useEffect(() => {
     return () => {
-      for (const it of items) {
-        URL.revokeObjectURL(it.previewUrl);
-      }
+      for (const it of items) URL.revokeObjectURL(it.previewUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function resetImagesState() {
-    // revoke previews
     for (const it of items) URL.revokeObjectURL(it.previewUrl);
 
     setItems([]);
@@ -147,9 +224,7 @@ export default function NewChapterForm({
   function addFiles(newFiles: File[]) {
     if (newFiles.length === 0) return;
 
-    // Só imagens
     const imageFiles = newFiles.filter((f) => f.type.startsWith("image/"));
-
     if (imageFiles.length === 0) {
       setMsg("Selecione apenas arquivos de imagem.");
       return;
@@ -172,8 +247,7 @@ export default function NewChapterForm({
     setItems((prev) => {
       const target = prev.find((x) => x.id === id);
       if (target) URL.revokeObjectURL(target.previewUrl);
-      const next = prev.filter((x) => x.id !== id);
-      return next;
+      return prev.filter((x) => x.id !== id);
     });
     setUploadedUrls([]);
     setUploadProgress(0);
@@ -182,6 +256,7 @@ export default function NewChapterForm({
 
   function moveItem(fromId: string, toId: string) {
     if (fromId === toId) return;
+
     setItems((prev) => {
       const fromIndex = prev.findIndex((x) => x.id === fromId);
       const toIndex = prev.findIndex((x) => x.id === toId);
@@ -192,8 +267,14 @@ export default function NewChapterForm({
       copy.splice(toIndex, 0, moved);
       return copy;
     });
+
     setUploadedUrls([]);
     setUploadProgress(0);
+    setMsg(null);
+  }
+
+  function moveUploadedUrl(fromIndex: number, toIndex: number) {
+    setUploadedUrls((prev) => moveInArray(prev, fromIndex, toIndex));
     setMsg(null);
   }
 
@@ -206,13 +287,12 @@ export default function NewChapterForm({
 
     try {
       const form = new FormData();
-      // Envia na ordem atual dos itens
       for (const it of items) form.append("files", it.file);
 
       const xhr = new XMLHttpRequest();
 
       const result = await new Promise<UploadResponse>((resolve, reject) => {
-        xhr.open("POST", "/api/upload/chapter", true);
+        xhr.open("POST", "/api/upload", true);
 
         xhr.upload.onprogress = (evt) => {
           if (!evt.lengthComputable) return;
@@ -258,7 +338,6 @@ export default function NewChapterForm({
         return;
       }
 
-      // Assume que o backend retorna as URLs na mesma ordem de envio
       setUploadedUrls(urls);
       setPagesText("");
       setUploadProgress(100);
@@ -267,7 +346,6 @@ export default function NewChapterForm({
       setMsg("Erro ao enviar imagens. Veja o terminal.");
     } finally {
       setUploading(false);
-      // não zera progresso automaticamente para o usuário ver o 100%
     }
   }
 
@@ -282,6 +360,12 @@ export default function NewChapterForm({
     }
 
     const chapterTitle = toNullableString(title);
+
+    const scanlatorIdToSend = showScanlatorSelect
+      ? scanlatorId.trim()
+        ? scanlatorId.trim()
+        : null
+      : null;
 
     let payload: CreateChapterPayload;
 
@@ -300,6 +384,7 @@ export default function NewChapterForm({
         number: chapterNumber,
         readMode,
         pages,
+        scanlatorId: scanlatorIdToSend,
       };
     } else {
       const textContent = novelText.trim();
@@ -313,6 +398,7 @@ export default function NewChapterForm({
         title: chapterTitle,
         number: chapterNumber,
         textContent,
+        scanlatorId: scanlatorIdToSend,
       };
     }
 
@@ -332,13 +418,18 @@ export default function NewChapterForm({
     router.refresh();
   }
 
-  const showReorderHint = kind === "IMAGES" && items.length > 1;
+  const showReorderHint =
+    kind === "IMAGES" &&
+    ((items.length > 1 && uploadedUrls.length === 0) || uploadedUrls.length > 1);
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-3 rounded-xl border bg-white p-4 shadow-sm"
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      void onSubmit(e);
+    }} 
+    className="space-y-3 rounded-xl border bg-white p-4 shadow-sm"
     >
+
       <div>
         <label className="text-sm font-medium">Tipo do capítulo</label>
         <select
@@ -348,11 +439,34 @@ export default function NewChapterForm({
             const v = e.target.value;
             if (v === "IMAGES" || v === "TEXT") onChangeKind(v);
           }}
+          disabled={uploading}
         >
           <option value="IMAGES">IMAGES (mangá/webtoon)</option>
           <option value="TEXT">TEXT (novel)</option>
         </select>
       </div>
+
+      {showScanlatorSelect && (
+        <div>
+          <label className="text-sm font-medium">Postar como (Scanlator)</label>
+          <select
+            className="w-full border rounded-md p-2"
+            value={scanlatorId}
+            onChange={(e) => setScanlatorId(e.target.value)}
+            disabled={uploading}
+          >
+            <option value="">Automático</option>
+            {scanlators.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.slug})
+              </option>
+            ))}
+          </select>
+          <div className="text-xs opacity-70 mt-1">
+            Se você for membro de mais de uma scan vinculada à obra, escolha aqui para evitar postar na scan errada.
+          </div>
+        </div>
+      )}
 
       {kind === "IMAGES" && (
         <div>
@@ -364,6 +478,7 @@ export default function NewChapterForm({
               const v = e.target.value;
               if (v === "SCROLL" || v === "PAGINATED") setReadMode(v);
             }}
+            disabled={uploading}
           >
             <option value="SCROLL">SCROLL</option>
             <option value="PAGINATED">PAGINATED</option>
@@ -380,6 +495,7 @@ export default function NewChapterForm({
             onChange={(e) => setNumber(e.target.value)}
             placeholder="ex: 1"
             inputMode="decimal"
+            disabled={uploading}
           />
         </div>
         <div>
@@ -389,6 +505,7 @@ export default function NewChapterForm({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="ex: O começo"
+            disabled={uploading}
           />
         </div>
       </div>
@@ -401,20 +518,25 @@ export default function NewChapterForm({
                 <div className="text-sm font-medium">Upload de páginas</div>
                 <div className="text-xs opacity-70">
                   Selecione várias imagens ou arraste e solte. Depois reordene e clique em “Enviar páginas”.
+                  Após o upload, você pode reordenar as URLs enviadas antes de salvar.
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={resetImagesState}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  resetImagesState();
+                }}
                 className="text-xs underline"
+                disabled={uploading}
               >
                 Limpar
               </button>
             </div>
 
             <div className="mt-3 space-y-3">
-              {/* Dropzone */}
               <div
                 className={[
                   "rounded-lg border border-dashed p-4 transition",
@@ -429,24 +551,24 @@ export default function NewChapterForm({
                   e.preventDefault();
                   setIsOverDropzone(false);
                   if (uploading) return;
-
-                  const files = Array.from(e.dataTransfer.files ?? []);
-                  addFiles(files);
+                  addFiles(Array.from(e.dataTransfer.files ?? []));
                 }}
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm">
                     <div className="font-medium">Arraste e solte aqui</div>
-                    <div className="text-xs opacity-70">
-                      ou clique para selecionar (apenas imagens)
-                    </div>
+                    <div className="text-xs opacity-70">ou clique para selecionar (apenas imagens)</div>
                   </div>
 
                   <button
                     type="button"
                     className="rounded-md bg-black px-3 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={uploading}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      fileInputRef.current?.click();
+                    }}
                   >
                     Selecionar arquivos
                   </button>
@@ -459,8 +581,8 @@ export default function NewChapterForm({
                   accept="image/*"
                   className="hidden"
                   onChange={(e) => {
-                    const files = Array.from(e.target.files ?? []);
-                    addFiles(files);
+                    addFiles(Array.from(e.target.files ?? []));
+                    e.target.value = "";
                   }}
                 />
               </div>
@@ -479,8 +601,7 @@ export default function NewChapterForm({
                 )}
               </div>
 
-              {/* Preview + reorder */}
-              {items.length > 0 && (
+              {uploadedUrls.length === 0 && items.length > 0 && (
                 <div className="rounded-lg border bg-white p-3">
                   <div className="text-sm font-medium">Preview (ordem das páginas)</div>
                   <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
@@ -511,24 +632,22 @@ export default function NewChapterForm({
                         }}
                         className={[
                           "relative overflow-hidden rounded-md border bg-gray-50",
-                          dropId === it.id && dragId && dragId !== it.id
-                            ? "ring-2 ring-black"
-                            : "",
+                          dropId === it.id && dragId && dragId !== it.id ? "ring-2 ring-black" : "",
                           uploading ? "opacity-70" : "",
                         ].join(" ")}
                         title={`Página ${idx + 1}: ${it.file.name}`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={it.previewUrl}
-                          alt={it.file.name}
-                          className="h-28 w-full object-cover"
-                        />
+                        <img src={it.previewUrl} alt={it.file.name} className="h-28 w-full object-cover" />
                         <div className="flex items-center justify-between gap-2 p-1">
                           <span className="text-[11px] opacity-70">#{idx + 1}</span>
                           <button
                             type="button"
-                            onClick={() => removeItem(it.id)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              removeItem(it.id);
+                            }}
                             disabled={uploading}
                             className="text-[11px] underline disabled:opacity-50"
                           >
@@ -541,12 +660,75 @@ export default function NewChapterForm({
                 </div>
               )}
 
-              {/* Upload button + progress */}
+              {uploadedUrls.length > 0 && (
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-sm font-medium">Páginas enviadas (ordem final)</div>
+                  <div className="text-xs opacity-70">
+                    Você pode reordenar aqui também (isso será salvo no capítulo).
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                    {uploadedUrls.map((url, idx) => {
+                      const id = `u-${idx}`;
+                      return (
+                        <div
+                          key={id}
+                          draggable={!uploading}
+                          onDragStart={() => {
+                            if (uploading) return;
+                            setDragId(id);
+                            setDropId(null);
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            if (uploading) return;
+                            setDropId(id);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (uploading) return;
+                            if (!dragId || !dragId.startsWith("u-")) return;
+
+                            const fromIndex = Number(dragId.slice(2));
+                            if (Number.isInteger(fromIndex)) {
+                              moveUploadedUrl(fromIndex, idx);
+                            }
+
+                            setDragId(null);
+                            setDropId(null);
+                          }}
+                          onDragEnd={() => {
+                            setDragId(null);
+                            setDropId(null);
+                          }}
+                          className={[
+                            "relative overflow-hidden rounded-md border bg-gray-50",
+                            dropId === id && dragId && dragId !== id ? "ring-2 ring-black" : "",
+                            uploading ? "opacity-70" : "",
+                          ].join(" ")}
+                          title={`Página ${idx + 1}`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt={`Página ${idx + 1}`} className="h-28 w-full object-cover" />
+                          <div className="p-1">
+                            <span className="text-[11px] opacity-70">#{idx + 1}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <button
                   type="button"
                   disabled={!canUpload}
-                  onClick={uploadSelectedFiles}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void uploadSelectedFiles();
+                  }}
                   className="rounded-md bg-black px-3 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploading ? `Enviando... (${uploadProgress}%)` : "Enviar páginas"}
@@ -555,14 +737,9 @@ export default function NewChapterForm({
                 {uploading && (
                   <div className="w-full">
                     <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className="h-2 bg-black transition-[width]"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
+                      <div className="h-2 bg-black transition-[width]" style={{ width: `${uploadProgress}%` }} />
                     </div>
-                    <div className="mt-1 text-xs opacity-70">
-                      Progresso do upload: {uploadProgress}%
-                    </div>
+                    <div className="mt-1 text-xs opacity-70">Progresso do upload: {uploadProgress}%</div>
                   </div>
                 )}
 
@@ -580,9 +757,7 @@ export default function NewChapterForm({
           </div>
 
           <div>
-            <label className="text-sm font-medium">
-              URLs das páginas (fallback, 1 por linha)
-            </label>
+            <label className="text-sm font-medium">URLs das páginas (fallback, 1 por linha)</label>
             <textarea
               className="w-full border rounded-md p-2"
               rows={6}
@@ -595,6 +770,7 @@ export default function NewChapterForm({
                 }
               }}
               placeholder={"https://...\nhttps://...\nhttps://..."}
+              disabled={uploading}
             />
           </div>
         </div>
@@ -606,6 +782,7 @@ export default function NewChapterForm({
             rows={10}
             value={novelText}
             onChange={(e) => setNovelText(e.target.value)}
+            disabled={uploading}
           />
         </div>
       )}

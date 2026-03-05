@@ -1,15 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
-import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
+  const body = await req.json().catch(() => ({} as Record<string, unknown>));
 
-  const email = String(body.email || "").toLowerCase().trim();
-  const password = String(body.password || "");
+  const email = String(body.email ?? "").toLowerCase().trim();
+  const password = String(body.password ?? "");
 
   if (!email || !password) {
-    return Response.json(
+    return NextResponse.json(
       { error: "Preencha email e senha." },
       { status: 400 }
     );
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   });
 
   if (!user) {
-    return Response.json(
+    return NextResponse.json(
       { error: "Email ou senha inválidos." },
       { status: 401 }
     );
@@ -29,20 +29,20 @@ export async function POST(req: Request) {
   const ok = await bcrypt.compare(password, user.passwordHash);
 
   if (!ok) {
-    return Response.json(
+    return NextResponse.json(
       { error: "Email ou senha inválidos." },
       { status: 401 }
     );
   }
 
-  const cookieStore = await cookies();
+  const res = NextResponse.json({ ok: true });
 
-  cookieStore.set("userId", user.id, {
+  res.cookies.set("userId", user.id, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     secure: process.env.NODE_ENV === "production",
   });
 
-  return Response.json({ ok: true });
+  return res;
 }
