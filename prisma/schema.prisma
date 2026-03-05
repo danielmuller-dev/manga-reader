@@ -192,6 +192,7 @@ model Favorite {
 enum ScanlatorMemberRole {
   OWNER
   EDITOR
+  UPLOADER
 }
 
 model Scanlator {
