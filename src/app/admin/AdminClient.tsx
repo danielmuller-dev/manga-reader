@@ -141,7 +141,6 @@ export default function AdminClient({ me }: { me: User }) {
         return;
       }
 
-      // Atualiza a lista local com a role salva
       setUsers((prev) =>
         prev.map((u) =>
           u.id === userId
@@ -150,7 +149,6 @@ export default function AdminClient({ me }: { me: User }) {
         )
       );
 
-      // Mantém draft alinhado
       setDraftRoles((prev) => ({ ...prev, [userId]: data.user.role }));
     } catch {
       setError("Falha de rede ao salvar role.");
@@ -169,14 +167,15 @@ export default function AdminClient({ me }: { me: User }) {
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        {/* Cards principais */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/admin/works"
             className="rounded-lg border bg-white p-4 hover:bg-gray-50"
           >
             <div className="text-sm font-semibold">Gerenciar Obras</div>
             <div className="mt-1 text-sm text-gray-600">
-              Visualizar todas as obras e gerenciar tags de cada uma.
+              Visualizar todas as obras e gerenciar tags.
             </div>
           </Link>
 
@@ -186,11 +185,22 @@ export default function AdminClient({ me }: { me: User }) {
           >
             <div className="text-sm font-semibold">Gerenciar Tags</div>
             <div className="mt-1 text-sm text-gray-600">
-              Criar e organizar os gêneros utilizados nas obras.
+              Criar e organizar os gêneros das obras.
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/scanlators"
+            className="rounded-lg border bg-white p-4 hover:bg-gray-50"
+          >
+            <div className="text-sm font-semibold">Gerenciar Scanlators</div>
+            <div className="mt-1 text-sm text-gray-600">
+              Criar e administrar as equipes de tradução.
             </div>
           </Link>
         </div>
 
+        {/* Atalhos */}
         <div className="rounded-lg border bg-white p-4">
           <div className="text-sm font-semibold">Atalhos</div>
 
@@ -208,15 +218,22 @@ export default function AdminClient({ me }: { me: User }) {
             >
               Ver Obras
             </Link>
+
+            <Link
+              href="/scanlators"
+              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+            >
+              Ver Scanlators
+            </Link>
           </div>
         </div>
 
-        {/* ✅ Gerenciar usuários */}
+        {/* Gerenciar usuários */}
         <section className="rounded-lg border bg-white p-4 space-y-4">
           <div>
             <div className="text-sm font-semibold">Gerenciar usuários</div>
             <p className="text-sm text-gray-600 mt-1">
-              Alterar permissões sem precisar abrir o banco.
+              Alterar permissões sem abrir o banco.
             </p>
           </div>
 
@@ -228,29 +245,23 @@ export default function AdminClient({ me }: { me: User }) {
               className="w-full sm:flex-1 rounded-md border px-3 py-2 text-sm"
             />
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => void loadUsers()}
-                disabled={loading}
-                className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
-              >
-                {loading ? "Carregando..." : "Recarregar"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => void loadUsers()}
+              disabled={loading}
+              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+            >
+              {loading ? "Carregando..." : "Recarregar"}
+            </button>
           </div>
 
-          {error ? <div className="text-sm text-red-600">{error}</div> : null}
+          {error && <div className="text-sm text-red-600">{error}</div>}
 
-          {loading ? (
-            <div className="text-sm text-gray-600">Carregando usuários…</div>
-          ) : null}
-
-          {!loading && filteredUsers.length === 0 ? (
+          {!loading && filteredUsers.length === 0 && (
             <div className="text-sm text-gray-600">Nenhum usuário encontrado.</div>
-          ) : null}
+          )}
 
-          {!loading && filteredUsers.length > 0 ? (
+          {!loading && filteredUsers.length > 0 && (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
@@ -268,17 +279,11 @@ export default function AdminClient({ me }: { me: User }) {
                     const draft = draftRoles[u.id] ?? u.role;
                     const changed = draft !== u.role;
                     const isSaving = savingId === u.id;
-                    const isSelf = u.id === me.id;
 
                     return (
                       <tr key={u.id} className="border-b">
                         <td className="py-2 pr-4">
-                          <div className="font-medium">
-                            {u.email}
-                            {isSelf ? (
-                              <span className="text-gray-500"> (você)</span>
-                            ) : null}
-                          </div>
+                          <div className="font-medium">{u.email}</div>
                           <div className="text-xs text-gray-500">{u.id}</div>
                         </td>
 
@@ -290,18 +295,11 @@ export default function AdminClient({ me }: { me: User }) {
                               if (isRole(v)) setDraftRole(u.id, v);
                             }}
                             className="rounded-md border px-2 py-1 text-sm"
-                            disabled={isSaving}
                           >
                             <option value="USER">USER</option>
                             <option value="SCAN">SCAN</option>
                             <option value="ADMIN">ADMIN</option>
                           </select>
-
-                          {changed ? (
-                            <div className="text-xs text-gray-500 mt-1">
-                              Alteração pendente
-                            </div>
-                          ) : null}
                         </td>
 
                         <td className="py-2 pr-4">{u._count.favorites}</td>
@@ -313,11 +311,6 @@ export default function AdminClient({ me }: { me: User }) {
                             className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
                             disabled={!changed || isSaving}
                             onClick={() => void saveRole(u.id)}
-                            title={
-                              isSelf
-                                ? "Proteção: a API não permite remover seu próprio ADMIN."
-                                : undefined
-                            }
                           >
                             {isSaving ? "Salvando..." : "Salvar"}
                           </button>
@@ -332,7 +325,7 @@ export default function AdminClient({ me }: { me: User }) {
                 </tbody>
               </table>
             </div>
-          ) : null}
+          )}
         </section>
       </div>
     </main>
