@@ -19,9 +19,17 @@ type Work = {
 
 type WorksResponse = { works: Work[] } | { error?: string };
 
+function coverFallback() {
+  return (
+    <div className="w-full h-full flex items-center justify-center text-xs text-white/50">
+      Sem capa
+    </div>
+  );
+}
+
 export default function WorksPage() {
-  const [works, setWorks] = useState<Work[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  // null = carregando
+  const [works, setWorks] = useState<Work[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const [me, setMe] = useState<MeResponse>({ user: null });
@@ -34,7 +42,7 @@ export default function WorksPage() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/me")
+    fetch("/api/me", { cache: "no-store" })
       .then(async (r) => {
         const d = (await r.json()) as MeResponse;
         if (!r.ok) throw new Error("Falha ao carregar usuário.");
@@ -57,7 +65,8 @@ export default function WorksPage() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/works")
+    // não setamos state aqui (pra evitar o warning do seu setup)
+    fetch("/api/works", { cache: "no-store" })
       .then(async (r) => {
         const d = (await r.json()) as WorksResponse;
 
@@ -80,10 +89,6 @@ export default function WorksPage() {
         if (cancelled) return;
         setWorks([]);
         setErr(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
       });
 
     return () => {
@@ -91,58 +96,87 @@ export default function WorksPage() {
     };
   }, []);
 
+  const loading = works === null;
+
   return (
-    <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-      <div className="max-w-4xl mx-auto space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold">Obras</h1>
-            <p className="text-sm text-gray-600">Lista de mangás/manhwas/webtoons cadastrados.</p>
+    <main className="min-h-screen">
+      <div className="space-y-5">
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-semibold tracking-tight">Obras</h1>
+            <p className="muted text-sm">
+              Lista de mangás/manhwas/webtoons cadastrados.
+            </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Link className="underline" href="/">
+          <div className="flex items-center gap-2">
+            <Link className="btn-secondary" href="/">
               Home
             </Link>
 
             {canCreate ? (
-              <Link className="underline" href="/works/new">
+              <Link className="btn-primary" href="/works/new">
                 Nova obra
               </Link>
             ) : null}
           </div>
-        </div>
+        </header>
 
-        {err ? <p className="text-red-600 text-sm">{err}</p> : null}
+        {err ? (
+          <div className="card p-4">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {err}
+            </div>
+          </div>
+        ) : null}
 
-        {loading ? <p>Carregando...</p> : null}
+        {loading ? (
+          <div className="card p-4">
+            <p className="text-sm text-white/70">Carregando...</p>
+          </div>
+        ) : null}
 
         {!loading && works.length === 0 ? (
-          <p className="text-sm text-gray-700">Nenhuma obra cadastrada ainda.</p>
+          <div className="card p-5">
+            <p className="text-sm text-white/70">Nenhuma obra cadastrada ainda.</p>
+            {canCreate ? (
+              <div className="mt-4">
+                <Link className="btn-primary" href="/works/new">
+                  Criar primeira obra
+                </Link>
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {!loading && works.length > 0 ? (
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {works.map((w) => (
               <li key={w.id}>
-                <Link
-                  href={`/works/${w.slug}`}
-                  className="block rounded-xl border bg-white p-4 shadow-sm hover:shadow transition"
-                >
+                <Link href={`/works/${w.slug}`} className="card card-hover block p-4">
                   <div className="flex gap-4">
-                    <div className="w-20 h-28 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
+                    <div className="w-20 h-28 overflow-hidden rounded-xl border border-white/10 bg-black/30">
                       {w.coverUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
+                        <img
+                          src={w.coverUrl}
+                          alt={w.title}
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
-                        <span className="text-xs opacity-60">Sem capa</span>
+                        coverFallback()
                       )}
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm opacity-70">{w.type}</div>
-                      <div className="text-lg font-semibold truncate">{w.title}</div>
-                      <div className="text-sm opacity-70 truncate">/{w.slug}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="chip">{w.type}</span>
+                        <span className="text-xs text-white/50 truncate">/{w.slug}</span>
+                      </div>
+
+                      <div className="mt-2 text-lg font-semibold truncate">{w.title}</div>
+
+                      <div className="mt-2 text-sm text-white/70">Abrir detalhes →</div>
                     </div>
                   </div>
                 </Link>

@@ -23,7 +23,7 @@ type CreateBody = {
   textContent?: string | null;
   pages?: string[] | null;
 
-  // ✅ novo: quando for SCAN, pode escolher qual scan está postando
+  // ✅ quando for SCAN, pode escolher qual scan está postando
   scanlatorId?: string | null;
 };
 
@@ -58,7 +58,10 @@ function readNullableString(value: unknown): string | null {
 function readStringArray(value: unknown): string[] | null {
   if (value === null) return null;
   if (!Array.isArray(value)) return null;
-  const arr = value.map((v) => String(v)).map((s) => s.trim()).filter(Boolean);
+  const arr = value
+    .map((v) => String(v))
+    .map((s) => s.trim())
+    .filter(Boolean);
   return arr;
 }
 
@@ -104,6 +107,16 @@ export async function GET(
       kind: true,
       readMode: true,
       createdAt: true,
+
+      // ✅ novo: scanlator que postou (p/ multi-scan)
+      scanlator: {
+        select: { id: true, slug: true, name: true },
+      },
+
+      // ✅ opcional (pode ser útil pra admin/auditoria)
+      uploadedBy: {
+        select: { id: true, name: true, email: true },
+      },
     },
   });
 

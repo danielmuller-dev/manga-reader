@@ -38,6 +38,14 @@ function roleLabel(role: Role) {
   return "User";
 }
 
+function navLinkClass(isActive: boolean) {
+  return [
+    "inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium transition",
+    "hover:bg-white/10",
+    isActive ? "bg-white/10 text-white" : "text-white/80",
+  ].join(" ");
+}
+
 export default function HeaderClient() {
   const pathname = usePathname();
 
@@ -115,141 +123,186 @@ export default function HeaderClient() {
     };
   }, [menuOpen]);
 
-  if (hideHeader) {
-    return null;
-  }
+  if (hideHeader) return null;
+
+  const isHome = pathname === "/";
+  const isWorks = pathname.startsWith("/works");
+  const isFavorites = pathname.startsWith("/favorites");
+  const isScanlators = pathname.startsWith("/scanlators");
+  const isAdminPath = pathname.startsWith("/admin");
 
   return (
-    <header className="border-b bg-white">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="font-semibold whitespace-nowrap">
-            Manga Reader
-          </Link>
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-white/5 backdrop-blur">
+      <div className="container-site">
+        <div className="flex items-center justify-between gap-3 py-3">
+          {/* Left */}
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold tracking-wide text-white hover:bg-white/10 transition"
+            >
+              <span>Manga Reader</span>
+              <span className="text-xs text-white/60">beta</span>
+            </Link>
 
-          <nav className="hidden md:flex items-center gap-3 text-sm">
-            <Link className="underline" href="/">
+            <nav className="hidden md:flex items-center gap-1">
+              <Link className={navLinkClass(isHome)} href="/">
+                Home
+              </Link>
+              <Link className={navLinkClass(isWorks)} href="/works">
+                Obras
+              </Link>
+              <Link className={navLinkClass(isFavorites)} href="/favorites">
+                Favoritos
+              </Link>
+
+              {canSeeScanlators ? (
+                <Link className={navLinkClass(isScanlators)} href="/scanlators">
+                  Scanlators
+                </Link>
+              ) : null}
+
+              {isAdmin ? (
+                <Link className={navLinkClass(isAdminPath)} href="/admin">
+                  Admin
+                </Link>
+              ) : null}
+            </nav>
+          </div>
+
+          {/* Center Search */}
+          <div className="flex-1 max-w-xl hidden sm:block">
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur px-3 py-2">
+              <WorkSearch />
+            </div>
+          </div>
+
+          {/* Right */}
+          <div className="flex items-center gap-3">
+            <div className="sm:hidden w-[190px]">
+              <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur px-3 py-2">
+                <WorkSearch />
+              </div>
+            </div>
+
+            {loading ? (
+              <span className="text-sm text-white/70">Carregando...</span>
+            ) : user ? (
+              <div className="relative" ref={menuRef}>
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2 py-1.5 hover:bg-white/10 transition"
+                >
+                  <div className="h-9 w-9 rounded-full border border-white/10 bg-black/30 flex items-center justify-center text-xs font-semibold text-white">
+                    {initials}
+                  </div>
+
+                  <div className="hidden sm:flex flex-col items-start leading-tight">
+                    <span className="max-w-[190px] truncate text-sm text-white">
+                      {displayName}
+                    </span>
+                    <span className="text-xs text-white/60">{roleLabel(user.role)}</span>
+                  </div>
+
+                  <span className="hidden sm:inline text-xs text-white/60">▾</span>
+                </button>
+
+                {menuOpen ? (
+                  <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur">
+                    <div className="px-4 py-3 border-b border-white/10">
+                      <div className="text-sm font-semibold truncate text-white">{displayName}</div>
+                      <div className="text-xs text-white/60 truncate">{user.email}</div>
+                    </div>
+
+                    <div className="p-2">
+                      <Link
+                        href="/me"
+                        onClick={() => setMenuOpen(false)}
+                        className="block rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-white/10 hover:text-white transition"
+                      >
+                        Minha conta
+                      </Link>
+
+                      <Link
+                        href="/favorites"
+                        onClick={() => setMenuOpen(false)}
+                        className="block rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-white/10 hover:text-white transition"
+                      >
+                        Favoritos
+                      </Link>
+
+                      {canSeeScanlators ? (
+                        <Link
+                          href="/scanlators"
+                          onClick={() => setMenuOpen(false)}
+                          className="block rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-white/10 hover:text-white transition"
+                        >
+                          Minha Scan
+                        </Link>
+                      ) : null}
+
+                      {isAdmin ? (
+                        <Link
+                          href="/admin"
+                          onClick={() => setMenuOpen(false)}
+                          className="block rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-white/10 hover:text-white transition"
+                        >
+                          Admin
+                        </Link>
+                      ) : null}
+
+                      <div className="my-2 border-t border-white/10" />
+
+                      <button
+                        type="button"
+                        onClick={logout}
+                        className="w-full text-left rounded-xl px-3 py-2 text-sm font-medium text-red-200 hover:bg-red-500/10 transition"
+                      >
+                        Sair
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link className="btn-secondary" href="/login">
+                  Login
+                </Link>
+                <Link className="btn-primary" href="/register">
+                  Criar conta
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile nav */}
+        <div className="md:hidden pb-3">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <Link className={navLinkClass(isHome)} href="/">
               Home
             </Link>
-            <Link className="underline" href="/works">
+            <Link className={navLinkClass(isWorks)} href="/works">
               Obras
             </Link>
-            <Link className="underline" href="/favorites">
+            <Link className={navLinkClass(isFavorites)} href="/favorites">
               Favoritos
             </Link>
 
             {canSeeScanlators ? (
-              <Link className="underline" href="/scanlators">
+              <Link className={navLinkClass(isScanlators)} href="/scanlators">
                 Scanlators
               </Link>
             ) : null}
 
             {isAdmin ? (
-              <Link className="underline" href="/admin">
+              <Link className={navLinkClass(isAdminPath)} href="/admin">
                 Admin
               </Link>
             ) : null}
-          </nav>
-        </div>
-
-        <div className="flex-1 max-w-md hidden sm:block">
-          <WorkSearch />
-        </div>
-
-        <div className="flex items-center gap-3 text-sm">
-          <div className="sm:hidden w-[180px]">
-            <WorkSearch />
           </div>
-
-          {loading ? (
-            <span className="opacity-60">Carregando...</span>
-          ) : user ? (
-            <div className="relative" ref={menuRef}>
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-2 rounded-md border px-2 py-1.5 hover:bg-gray-50"
-              >
-                <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-700">
-                  {initials}
-                </div>
-
-                <div className="hidden sm:flex flex-col items-start leading-tight">
-                  <span className="max-w-[180px] truncate">{displayName}</span>
-                  <span className="text-xs opacity-60">{roleLabel(user.role)}</span>
-                </div>
-
-                <span className="hidden sm:inline text-xs opacity-60">▾</span>
-              </button>
-
-              {menuOpen ? (
-                <div className="absolute right-0 mt-2 w-56 rounded-xl border bg-white shadow-lg overflow-hidden">
-                  <div className="px-3 py-2 border-b">
-                    <div className="text-sm font-medium truncate">{displayName}</div>
-                    <div className="text-xs opacity-60">{user.email}</div>
-                  </div>
-
-                  <div className="p-1">
-                    <Link
-                      href="/me"
-                      onClick={() => setMenuOpen(false)}
-                      className="block rounded-lg px-3 py-2 text-sm hover:bg-gray-50"
-                    >
-                      Minha conta
-                    </Link>
-
-                    <Link
-                      href="/favorites"
-                      onClick={() => setMenuOpen(false)}
-                      className="block rounded-lg px-3 py-2 text-sm hover:bg-gray-50"
-                    >
-                      Favoritos
-                    </Link>
-
-                    {canSeeScanlators ? (
-                      <Link
-                        href="/scanlators"
-                        onClick={() => setMenuOpen(false)}
-                        className="block rounded-lg px-3 py-2 text-sm hover:bg-gray-50"
-                      >
-                        Minha Scan
-                      </Link>
-                    ) : null}
-
-                    {isAdmin ? (
-                      <Link
-                        href="/admin"
-                        onClick={() => setMenuOpen(false)}
-                        className="block rounded-lg px-3 py-2 text-sm hover:bg-gray-50"
-                      >
-                        Admin
-                      </Link>
-                    ) : null}
-
-                    <button
-                      type="button"
-                      onClick={logout}
-                      className="w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-gray-50 text-red-600"
-                    >
-                      Sair
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <>
-              <Link className="underline whitespace-nowrap" href="/login">
-                Login
-              </Link>
-              <Link
-                className="rounded-md bg-black text-white px-3 py-2 hover:opacity-90 whitespace-nowrap"
-                href="/register"
-              >
-                Criar conta
-              </Link>
-            </>
-          )}
         </div>
       </div>
     </header>

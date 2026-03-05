@@ -45,12 +45,20 @@ function formatChapterLabel(n: number | null, t: string | null) {
   return t ? `${base} — ${t}` : base;
 }
 
+function surfaceCoverFallback() {
+  return (
+    <div className="w-full h-full flex items-center justify-center text-xs text-white/50">
+      Sem capa
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [data, setData] = useState<HomeResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/home")
+    fetch("/api/home", { cache: "no-store" })
       .then(async (r) => {
         const d = (await r.json()) as HomeResponse;
         if (!r.ok) throw new Error(d.error || "Erro ao carregar home.");
@@ -62,13 +70,30 @@ export default function HomePage() {
 
   if (err) {
     return (
-      <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-        <div className="max-w-5xl mx-auto space-y-3">
-          <h1 className="text-2xl font-semibold">Home</h1>
-          <p className="text-red-600">{err}</p>
-          <Link className="underline" href="/works">
-            Ir para Obras
-          </Link>
+      <main className="min-h-screen">
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold">Home</h1>
+              <p className="muted text-sm">Painel do Manga Reader</p>
+            </div>
+
+            <Link className="btn-secondary" href="/works">
+              Obras
+            </Link>
+          </div>
+
+          <div className="card p-4">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {err}
+            </div>
+
+            <div className="mt-4">
+              <Link className="btn-primary" href="/works">
+                Ir para Obras
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
     );
@@ -76,28 +101,47 @@ export default function HomePage() {
 
   if (!data) {
     return (
-      <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-        <div className="max-w-5xl mx-auto space-y-3">
-          <h1 className="text-2xl font-semibold">Home</h1>
-          <p>Carregando...</p>
+      <main className="min-h-screen">
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight">Manga Reader</h1>
+              <p className="muted text-sm">
+                Leitura em PT-BR • Mangá / Manhwa / Manhua / Webtoon / Novel
+              </p>
+            </div>
+
+            <Link className="btn-secondary" href="/works">
+              Obras
+            </Link>
+          </div>
+
+          <div className="card p-4">
+            <p className="text-sm text-white/70">Carregando...</p>
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <main className="min-h-screen">
+      <div className="space-y-10">
         <header className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-semibold">Manga Reader</h1>
-            <p className="text-sm opacity-70">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
+              <span className="text-sm font-semibold tracking-wide">Manga Reader</span>
+              <span className="text-xs text-white/60">beta</span>
+            </div>
+
+            <h1 className="mt-5 text-3xl font-semibold tracking-tight">Home</h1>
+            <p className="mt-2 text-sm text-white/70">
               Leitura em PT-BR • Mangá / Manhwa / Manhua / Webtoon / Novel
             </p>
           </div>
 
-          <nav className="flex items-center gap-3">
-            <Link className="underline" href="/works">
+          <nav className="flex items-center gap-2">
+            <Link className="btn-secondary" href="/works">
               Obras
             </Link>
           </nav>
@@ -105,16 +149,22 @@ export default function HomePage() {
 
         {/* Favoritos */}
         <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Meus favoritos</h2>
-            <Link className="underline" href="/works">
-              Ver obras
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Meus favoritos</h2>
+              <p className="muted text-sm">Acesso rápido às obras que você curte.</p>
+            </div>
+
+            <Link className="btn-ghost" href="/works">
+              Ver obras →
             </Link>
           </div>
 
           {data.favorites.length === 0 ? (
-            <div className="rounded-xl border bg-white p-4 shadow-sm">
-              <p className="text-sm opacity-70">Você ainda não favoritou nenhuma obra.</p>
+            <div className="card p-5">
+              <p className="text-sm text-white/70">
+                Você ainda não favoritou nenhuma obra.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -122,19 +172,26 @@ export default function HomePage() {
                 <Link
                   key={w.id}
                   href={`/works/${w.slug}`}
-                  className="rounded-xl border bg-white p-2 shadow-sm hover:bg-gray-50"
+                  className="card card-hover p-2"
                 >
-                  <div className="w-full aspect-[3/4] bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
+                  <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     {w.coverUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
+                      <img
+                        src={w.coverUrl}
+                        alt={w.title}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
-                      <span className="text-xs opacity-60">Sem capa</span>
+                      surfaceCoverFallback()
                     )}
                   </div>
-                  <div className="mt-2">
-                    <div className="text-xs opacity-70">{w.type}</div>
-                    <div className="text-sm font-medium leading-tight line-clamp-2">{w.title}</div>
+
+                  <div className="mt-2 px-1">
+                    <div className="text-xs text-white/60">{w.type}</div>
+                    <div className="text-sm font-semibold leading-tight line-clamp-2">
+                      {w.title}
+                    </div>
                   </div>
                 </Link>
               ))}
@@ -144,12 +201,15 @@ export default function HomePage() {
 
         {/* Continuar lendo */}
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Continuar lendo</h2>
+          <div>
+            <h2 className="text-xl font-semibold">Continuar lendo</h2>
+            <p className="muted text-sm">Retome exatamente de onde você parou.</p>
+          </div>
 
           {data.progress.length === 0 ? (
-            <div className="rounded-xl border bg-white p-4 shadow-sm">
-              <p className="text-sm opacity-70">
-                Nenhum progresso ainda. Abra um capítulo e role a página ou mude de página para salvar automaticamente.
+            <div className="card p-5">
+              <p className="text-sm text-white/70">
+                Nenhum progresso ainda. Abra um capítulo e role a página (scroll) ou mude de página (paginado) para salvar automaticamente.
               </p>
             </div>
           ) : (
@@ -160,32 +220,39 @@ export default function HomePage() {
                     ? `?p=${p.pageIndex ?? 0}`
                     : `?s=${p.scrollY ?? 0}`;
 
+                const where =
+                  p.mode === "PAGINATED"
+                    ? `Página ${((p.pageIndex ?? 0) + 1).toString()}`
+                    : `Scroll ${p.scrollY ?? 0}px`;
+
                 return (
                   <Link
                     key={`${p.work.slug}-${p.chapterId}`}
                     href={`/read/${p.chapterId}${qs}`}
-                    className="rounded-xl border bg-white p-4 shadow-sm hover:bg-gray-50"
+                    className="card card-hover p-4"
                   >
                     <div className="flex gap-3">
-                      <div className="w-16 h-24 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
+                      <div className="w-16 h-24 overflow-hidden rounded-xl border border-white/10 bg-black/30">
                         {p.work.coverUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.work.coverUrl} alt={p.work.title} className="w-full h-full object-cover" />
+                          <img
+                            src={p.work.coverUrl}
+                            alt={p.work.title}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
-                          <span className="text-xs opacity-60">Sem capa</span>
+                          surfaceCoverFallback()
                         )}
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs opacity-70">{p.work.type}</div>
+                        <div className="text-xs text-white/60">{p.work.type}</div>
                         <div className="font-semibold truncate">{p.work.title}</div>
-                        <div className="text-sm opacity-80 truncate">
+                        <div className="text-sm text-white/80 truncate">
                           {formatChapterLabel(p.chapter.number, p.chapter.title)}
                         </div>
-                        <div className="text-xs opacity-70 mt-1">
-                          {p.mode === "PAGINATED"
-                            ? `Página ${((p.pageIndex ?? 0) + 1).toString()}`
-                            : `Scroll ${p.scrollY ?? 0}px`}
+                        <div className="mt-1 inline-flex items-center gap-2">
+                          <span className="chip">{where}</span>
                         </div>
                       </div>
                     </div>
@@ -198,16 +265,20 @@ export default function HomePage() {
 
         {/* Últimas obras */}
         <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Últimas obras</h2>
-            <Link className="underline" href="/works">
-              Ver todas
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Últimas obras</h2>
+              <p className="muted text-sm">Novidades recém cadastradas.</p>
+            </div>
+
+            <Link className="btn-ghost" href="/works">
+              Ver todas →
             </Link>
           </div>
 
           {data.latestWorks.length === 0 ? (
-            <div className="rounded-xl border bg-white p-4 shadow-sm">
-              <p className="text-sm opacity-70">Nenhuma obra cadastrada ainda.</p>
+            <div className="card p-5">
+              <p className="text-sm text-white/70">Nenhuma obra cadastrada ainda.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -215,19 +286,26 @@ export default function HomePage() {
                 <Link
                   key={w.id}
                   href={`/works/${w.slug}`}
-                  className="rounded-xl border bg-white p-2 shadow-sm hover:bg-gray-50"
+                  className="card card-hover p-2"
                 >
-                  <div className="w-full aspect-[3/4] bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
+                  <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     {w.coverUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
+                      <img
+                        src={w.coverUrl}
+                        alt={w.title}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
-                      <span className="text-xs opacity-60">Sem capa</span>
+                      surfaceCoverFallback()
                     )}
                   </div>
-                  <div className="mt-2">
-                    <div className="text-xs opacity-70">{w.type}</div>
-                    <div className="text-sm font-medium leading-tight line-clamp-2">{w.title}</div>
+
+                  <div className="mt-2 px-1">
+                    <div className="text-xs text-white/60">{w.type}</div>
+                    <div className="text-sm font-semibold leading-tight line-clamp-2">
+                      {w.title}
+                    </div>
                   </div>
                 </Link>
               ))}
@@ -237,38 +315,46 @@ export default function HomePage() {
 
         {/* Últimos capítulos */}
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Últimos capítulos</h2>
+          <div>
+            <h2 className="text-xl font-semibold">Últimos capítulos</h2>
+            <p className="muted text-sm">Uploads recentes em qualquer obra.</p>
+          </div>
 
           {data.latestChapters.length === 0 ? (
-            <div className="rounded-xl border bg-white p-4 shadow-sm">
-              <p className="text-sm opacity-70">Nenhum capítulo cadastrado ainda.</p>
+            <div className="card p-5">
+              <p className="text-sm text-white/70">Nenhum capítulo cadastrado ainda.</p>
             </div>
           ) : (
-            <div className="rounded-xl border bg-white p-4 shadow-sm">
+            <div className="card p-4">
               <ul className="space-y-2">
                 {data.latestChapters.map((c) => (
-                  <li key={c.id} className="flex items-center justify-between gap-3 border rounded-lg p-3">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{c.work.title}</div>
-                      <div className="text-sm opacity-80 truncate">
-                        {formatChapterLabel(c.number, c.title)}
-                      </div>
-                      <div className="text-xs opacity-70">
-                        {c.kind}
-                        {c.kind === "IMAGES" && c.readMode ? ` • ${c.readMode}` : ""}
-                      </div>
-                    </div>
+                  <li
+                    key={c.id}
+                    className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:bg-black/30"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold truncate">{c.work.title}</div>
+                        <div className="text-sm text-white/80 truncate">
+                          {formatChapterLabel(c.number, c.title)}
+                        </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Link className="underline" href={`/works/${c.work.slug}`}>
-                        Obra
-                      </Link>
-                      <Link
-                        className="rounded-md bg-black text-white px-3 py-2 hover:opacity-90"
-                        href={`/read/${c.id}`}
-                      >
-                        Ler
-                      </Link>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="chip">
+                            {c.kind}
+                            {c.kind === "IMAGES" && c.readMode ? ` • ${c.readMode}` : ""}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Link className="btn-secondary" href={`/works/${c.work.slug}`}>
+                          Obra
+                        </Link>
+                        <Link className="btn-primary" href={`/read/${c.id}`}>
+                          Ler
+                        </Link>
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -277,7 +363,9 @@ export default function HomePage() {
           )}
         </section>
 
-        <footer className="text-xs opacity-60">MVP • Próximo: permissões (SCAN/ADMIN) e painel de scans.</footer>
+        <footer className="text-xs text-white/50">
+          MVP • Próximo: polir páginas (Obras / Página da Obra / Reader) e melhorar experiência de leitura.
+        </footer>
       </div>
     </main>
   );
