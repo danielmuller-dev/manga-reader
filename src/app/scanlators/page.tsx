@@ -10,12 +10,14 @@ type BaseScanlatorCard = {
   description: string | null;
 };
 
+type ScanlatorMemberRole = "OWNER" | "EDITOR" | "UPLOADER";
+
 type MemberScanlatorCard = BaseScanlatorCard & {
-  memberRole: "OWNER" | "EDITOR";
+  memberRole: ScanlatorMemberRole;
 };
 
 type MembershipRow = {
-  role: "OWNER" | "EDITOR";
+  role: ScanlatorMemberRole;
   scanlator: BaseScanlatorCard;
 };
 
