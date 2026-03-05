@@ -1,4 +1,5 @@
 import { put } from "@vercel/blob";
+import { requireRole } from "@/lib/auth";
 
 function sanitizeFilename(name: string): string {
   // Mantém letras/números/._- e troca o resto por "-"
@@ -14,7 +15,21 @@ function makeSuffix(): string {
   return Math.random().toString(16).slice(2, 10);
 }
 
+function authStatus(auth: { user: { id: string } | null }) {
+  return auth.user === null ? 401 : 403;
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 export async function POST(req: Request) {
+  const auth = await requireRole(["SCAN", "ADMIN"]);
+  if (!auth.ok) {
+    return Response.json({ error: auth.error }, { status: authStatus(auth) });
+  }
+
   try {
     const form = await req.formData();
     const raw = form.getAll("files");
@@ -47,7 +62,23 @@ export async function POST(req: Request) {
 
     return Response.json({ urls });
   } catch (error) {
+    const msg = getErrorMessage(error);
     console.error("Upload error:", error);
-    return Response.json({ error: "Erro no upload." }, { status: 500 });
+
+    // mensagem amigável quando token/config do Blob está faltando/errada
+    const maybeBlobConfig =
+      msg.toLowerCase().includes("blob") ||
+      msg.toLowerCase().includes("token") ||
+      msg.toLowerCase().includes("forbidden") ||
+      msg.toLowerCase().includes("unauthorized");
+
+    return Response.json(
+      {
+        error: maybeBlobConfig
+          ? "Erro no upload (Vercel Blob). Verifique se o Blob está habilitado no projeto e se as variáveis de ambiente do Blob foram configuradas no Vercel."
+          : "Erro no upload.",
+      },
+      { status: 500 }
+    );
   }
 }

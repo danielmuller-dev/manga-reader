@@ -10,9 +10,9 @@ type CreateBody = {
   type?: unknown;
 };
 
-type WorkType = "MANGA" | "MANHWA" | "MANHUA" | "NOVEL";
+type WorkType = "MANGA" | "MANHWA" | "MANHUA" | "WEBTOON" | "NOVEL";
 
-const WORK_TYPES: readonly WorkType[] = ["MANGA", "MANHWA", "MANHUA", "NOVEL"] as const;
+const WORK_TYPES: readonly WorkType[] = ["MANGA", "MANHWA", "MANHUA", "WEBTOON", "NOVEL"] as const;
 
 function authStatus(auth: { user: { id: string } | null }) {
   return auth.user === null ? 401 : 403;

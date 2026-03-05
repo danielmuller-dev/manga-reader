@@ -91,15 +91,14 @@ export default function HomePage() {
         <header className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-3xl font-semibold">Manga Reader</h1>
-            <p className="text-sm opacity-70">Leitura em PT-BR • Mangá / Manhwa / Manhua / Webtoon / Novel</p>
+            <p className="text-sm opacity-70">
+              Leitura em PT-BR • Mangá / Manhwa / Manhua / Webtoon / Novel
+            </p>
           </div>
 
           <nav className="flex items-center gap-3">
             <Link className="underline" href="/works">
               Obras
-            </Link>
-            <Link className="underline" href="/works/new">
-              Nova obra
             </Link>
           </nav>
         </header>
@@ -251,7 +250,9 @@ export default function HomePage() {
                   <li key={c.id} className="flex items-center justify-between gap-3 border rounded-lg p-3">
                     <div className="min-w-0">
                       <div className="font-medium truncate">{c.work.title}</div>
-                      <div className="text-sm opacity-80 truncate">{formatChapterLabel(c.number, c.title)}</div>
+                      <div className="text-sm opacity-80 truncate">
+                        {formatChapterLabel(c.number, c.title)}
+                      </div>
                       <div className="text-xs opacity-70">
                         {c.kind}
                         {c.kind === "IMAGES" && c.readMode ? ` • ${c.readMode}` : ""}
@@ -262,7 +263,10 @@ export default function HomePage() {
                       <Link className="underline" href={`/works/${c.work.slug}`}>
                         Obra
                       </Link>
-                      <Link className="rounded-md bg-black text-white px-3 py-2 hover:opacity-90" href={`/read/${c.id}`}>
+                      <Link
+                        className="rounded-md bg-black text-white px-3 py-2 hover:opacity-90"
+                        href={`/read/${c.id}`}
+                      >
                         Ler
                       </Link>
                     </div>
@@ -273,9 +277,7 @@ export default function HomePage() {
           )}
         </section>
 
-        <footer className="text-xs opacity-60">
-          MVP • Próximo: permissões (SCAN/ADMIN) e painel de scans.
-        </footer>
+        <footer className="text-xs opacity-60">MVP • Próximo: permissões (SCAN/ADMIN) e painel de scans.</footer>
       </div>
     </main>
   );

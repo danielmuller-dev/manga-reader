@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 const KINDS = ["IMAGES", "TEXT"] as const;
 type Kind = (typeof KINDS)[number];
@@ -182,7 +182,7 @@ export default function NewChapterForm({
       }
     }
 
-    load();
+    void load();
 
     return () => {
       cancelled = true;
@@ -293,6 +293,7 @@ export default function NewChapterForm({
 
       const result = await new Promise<UploadResponse>((resolve, reject) => {
         xhr.open("POST", "/api/upload", true);
+        xhr.withCredentials = true;
 
         xhr.upload.onprogress = (evt) => {
           if (!evt.lengthComputable) return;
@@ -349,7 +350,7 @@ export default function NewChapterForm({
     }
   }
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMsg(null);
 
@@ -370,8 +371,7 @@ export default function NewChapterForm({
     let payload: CreateChapterPayload;
 
     if (kind === "IMAGES") {
-      const pages =
-        uploadedUrls.length > 0 ? uploadedUrls : parseUrlsFromTextarea(pagesText);
+      const pages = uploadedUrls.length > 0 ? uploadedUrls : parseUrlsFromTextarea(pagesText);
 
       if (pages.length === 0) {
         setMsg("Envie pelo menos 1 página (upload) ou cole URLs (uma por linha).");
@@ -423,13 +423,7 @@ export default function NewChapterForm({
     ((items.length > 1 && uploadedUrls.length === 0) || uploadedUrls.length > 1);
 
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      void onSubmit(e);
-    }} 
-    className="space-y-3 rounded-xl border bg-white p-4 shadow-sm"
-    >
-
+    <form onSubmit={onSubmit} className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
       <div>
         <label className="text-sm font-medium">Tipo do capítulo</label>
         <select
@@ -663,9 +657,7 @@ export default function NewChapterForm({
               {uploadedUrls.length > 0 && (
                 <div className="rounded-lg border bg-white p-3">
                   <div className="text-sm font-medium">Páginas enviadas (ordem final)</div>
-                  <div className="text-xs opacity-70">
-                    Você pode reordenar aqui também (isso será salvo no capítulo).
-                  </div>
+                  <div className="text-xs opacity-70">Você pode reordenar aqui também (isso será salvo no capítulo).</div>
 
                   <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
                     {uploadedUrls.map((url, idx) => {
@@ -748,9 +740,7 @@ export default function NewChapterForm({
                     Upload concluído! {uploadedUrls.length} página(s) pronta(s) para salvar.
                   </div>
                 ) : (
-                  <div className="text-xs opacity-70">
-                    Alternativa (fallback): cole URLs públicas abaixo (1 por linha).
-                  </div>
+                  <div className="text-xs opacity-70">Alternativa (fallback): cole URLs públicas abaixo (1 por linha).</div>
                 )}
               </div>
             </div>
