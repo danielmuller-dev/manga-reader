@@ -4,10 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 
 type Tag = { id: string; slug: string; name: string };
 
+function cx(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+
 export default function TagAdminClient() {
-  const [name, setName] = useState("");
+  const [name, setName] = useState<string>("");
   const [items, setItems] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function load() {
@@ -62,52 +66,87 @@ export default function TagAdminClient() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-4">
-        <div className="text-sm font-semibold">Criar nova tag</div>
+      {/* Create */}
+      <div className="card p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-white/90">Criar nova tag</div>
+            <p className="muted mt-1 text-sm">Ex: Ação, Romance, Isekai…</p>
+          </div>
 
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <span className="chip">Tags</span>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Ex: Ação, Romance, Isekai..."
-            className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-gray-400"
-          />
-          <button
-            onClick={createTag}
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+            placeholder="Digite o nome da tag…"
+            className={cx(
+              "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+              "text-white placeholder:text-white/40 outline-none",
+              "focus:ring-2 focus:ring-white/20"
+            )}
             disabled={loading}
+          />
+
+          <button
+            type="button"
+            onClick={() => void createTag()}
+            className={cx("btn-primary", loading && "opacity-70")}
+            disabled={loading}
+            title="Criar tag"
           >
-            Criar
+            {loading ? "Criando..." : "Criar"}
           </button>
         </div>
 
-        {msg ? <div className="mt-2 text-xs text-gray-600">{msg}</div> : null}
+        {msg ? (
+          <div
+            className={cx(
+              "mt-3 rounded-xl border p-3 text-xs",
+              msg === "Tag criada!"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                : "border-white/10 bg-white/5 text-white/80"
+            )}
+          >
+            {msg}
+          </div>
+        ) : null}
       </div>
 
-      <div className="rounded-lg border bg-white p-4">
+      {/* List */}
+      <div className="card p-5">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-sm font-semibold">Tags</div>
+          <div>
+            <div className="text-sm font-semibold text-white/90">Tags</div>
+            <p className="muted mt-1 text-sm">{items.length} no total</p>
+          </div>
+
           <button
-            onClick={load}
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+            type="button"
+            onClick={() => void load()}
+            className="btn-secondary"
             disabled={loading}
+            title="Atualizar lista"
           >
-            Atualizar
+            {loading ? "Atualizando..." : "Atualizar"}
           </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           {items.map((t) => (
             <span
               key={t.id}
-              className="rounded-full border px-3 py-1 text-xs bg-gray-50"
+              className="chip"
               title={t.slug}
             >
               {t.name}
             </span>
           ))}
+
           {items.length === 0 && !loading ? (
-            <span className="text-sm text-gray-600">Nenhuma tag ainda.</span>
+            <span className="muted text-sm">Nenhuma tag ainda.</span>
           ) : null}
         </div>
       </div>

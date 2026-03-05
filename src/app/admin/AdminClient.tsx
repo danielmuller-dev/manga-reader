@@ -45,6 +45,19 @@ function roleLabel(role: Role) {
   return "USER";
 }
 
+function cx(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+
+function initialsFromEmail(email: string) {
+  const s = email.trim();
+  if (!s) return "U";
+  const left = s.split("@")[0] || "u";
+  const a = left[0]?.toUpperCase() ?? "U";
+  const b = left[1]?.toUpperCase() ?? "";
+  return `${a}${b}`;
+}
+
 export default function AdminClient({ me }: { me: User }) {
   const [loading, setLoading] = useState<boolean>(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -108,6 +121,11 @@ export default function AdminClient({ me }: { me: User }) {
     });
   }, [filter, users]);
 
+  const meLabel = useMemo(() => {
+    const name = (me.name ?? "").trim();
+    return name ? name : me.email;
+  }, [me.email, me.name]);
+
   function setDraftRole(userId: string, role: Role) {
     setDraftRoles((prev) => ({ ...prev, [userId]: role }));
   }
@@ -158,83 +176,100 @@ export default function AdminClient({ me }: { me: User }) {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold">Painel Admin</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Bem-vindo {me.name ?? me.email} ({roleLabel(me.role)})
-          </p>
-        </div>
+    <main className="min-h-screen text-white">
+      {/* Background */}
+      <div className="fixed inset-0 -z-10 bg-gradient-to-b from-black via-zinc-950 to-black" />
+      <div className="fixed inset-0 -z-10 opacity-40">
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -bottom-56 left-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+        <div className="absolute -bottom-40 right-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 py-10 space-y-6">
+        {/* Header */}
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold">Painel Admin</h1>
+            <p className="muted text-sm">
+              Bem-vindo <span className="font-medium text-white/90">{meLabel}</span>{" "}
+              <span className="text-white/50">({roleLabel(me.role)})</span>
+            </p>
+          </div>
+
+          <nav className="flex flex-wrap items-center gap-2">
+            <Link className="btn-secondary" href="/">
+              Home
+            </Link>
+            <Link className="btn-secondary" href="/works">
+              Obras
+            </Link>
+            <Link className="btn-secondary" href="/scanlators">
+              Scanlators
+            </Link>
+          </nav>
+        </header>
 
         {/* Cards principais */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/admin/works"
-            className="rounded-lg border bg-white p-4 hover:bg-gray-50"
+            className="card card-hover p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
           >
-            <div className="text-sm font-semibold">Gerenciar Obras</div>
-            <div className="mt-1 text-sm text-gray-600">
-              Visualizar todas as obras e gerenciar tags.
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-white/90">Gerenciar Obras</div>
+                <div className="muted mt-1 text-sm">
+                  Visualizar todas as obras e gerenciar tags.
+                </div>
+              </div>
+              <span className="chip">Works</span>
             </div>
           </Link>
 
           <Link
             href="/admin/tags"
-            className="rounded-lg border bg-white p-4 hover:bg-gray-50"
+            className="card card-hover p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
           >
-            <div className="text-sm font-semibold">Gerenciar Tags</div>
-            <div className="mt-1 text-sm text-gray-600">
-              Criar e organizar os gêneros das obras.
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-white/90">Gerenciar Tags</div>
+                <div className="muted mt-1 text-sm">Criar e organizar os gêneros das obras.</div>
+              </div>
+              <span className="chip">Tags</span>
             </div>
           </Link>
 
           <Link
             href="/admin/scanlators"
-            className="rounded-lg border bg-white p-4 hover:bg-gray-50"
+            className="card card-hover p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
           >
-            <div className="text-sm font-semibold">Gerenciar Scanlators</div>
-            <div className="mt-1 text-sm text-gray-600">
-              Criar e administrar as equipes de tradução.
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-white/90">Gerenciar Scanlators</div>
+                <div className="muted mt-1 text-sm">Criar e administrar equipes de tradução.</div>
+              </div>
+              <span className="chip">Teams</span>
             </div>
           </Link>
-        </div>
-
-        {/* Atalhos */}
-        <div className="rounded-lg border bg-white p-4">
-          <div className="text-sm font-semibold">Atalhos</div>
-
-          <div className="flex flex-wrap gap-2 mt-3">
-            <Link
-              href="/"
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-            >
-              Home
-            </Link>
-
-            <Link
-              href="/works"
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-            >
-              Ver Obras
-            </Link>
-
-            <Link
-              href="/scanlators"
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-            >
-              Ver Scanlators
-            </Link>
-          </div>
-        </div>
+        </section>
 
         {/* Gerenciar usuários */}
-        <section className="rounded-lg border bg-white p-4 space-y-4">
-          <div>
-            <div className="text-sm font-semibold">Gerenciar usuários</div>
-            <p className="text-sm text-gray-600 mt-1">
-              Alterar permissões sem abrir o banco.
-            </p>
+        <section className="card p-5 space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-white/90">Gerenciar usuários</div>
+              <p className="muted mt-1 text-sm">Alterar permissões sem abrir o banco.</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void loadUsers()}
+              disabled={loading}
+              className="btn-secondary"
+              title="Recarregar lista de usuários"
+            >
+              {loading ? "Carregando..." : "Recarregar"}
+            </button>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -242,35 +277,39 @@ export default function AdminClient({ me }: { me: User }) {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filtrar por email ou id…"
-              className="w-full sm:flex-1 rounded-md border px-3 py-2 text-sm"
+              className={cx(
+                "w-full sm:flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+                "text-white placeholder:text-white/40 outline-none",
+                "focus:ring-2 focus:ring-white/20"
+              )}
             />
 
-            <button
-              type="button"
-              onClick={() => void loadUsers()}
-              disabled={loading}
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
-            >
-              {loading ? "Carregando..." : "Recarregar"}
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="chip">{filteredUsers.length}</span>
+              <span className="text-xs text-white/60">resultados</span>
+            </div>
           </div>
 
-          {error && <div className="text-sm text-red-600">{error}</div>}
+          {error && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+              {error}
+            </div>
+          )}
 
           {!loading && filteredUsers.length === 0 && (
-            <div className="text-sm text-gray-600">Nenhum usuário encontrado.</div>
+            <div className="muted text-sm">Nenhum usuário encontrado.</div>
           )}
 
           {!loading && filteredUsers.length > 0 && (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-2xl border border-white/10">
               <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b">
-                    <th className="py-2 pr-4">Email</th>
-                    <th className="py-2 pr-4">Role</th>
-                    <th className="py-2 pr-4">Favoritos</th>
-                    <th className="py-2 pr-4">Progresso</th>
-                    <th className="py-2 pr-4">Ação</th>
+                <thead className="bg-white/5">
+                  <tr className="text-left text-white/80">
+                    <th className="py-3 px-4">Usuário</th>
+                    <th className="py-3 px-4">Role</th>
+                    <th className="py-3 px-4">Favoritos</th>
+                    <th className="py-3 px-4">Progresso</th>
+                    <th className="py-3 px-4">Ação</th>
                   </tr>
                 </thead>
 
@@ -281,41 +320,55 @@ export default function AdminClient({ me }: { me: User }) {
                     const isSaving = savingId === u.id;
 
                     return (
-                      <tr key={u.id} className="border-b">
-                        <td className="py-2 pr-4">
-                          <div className="font-medium">{u.email}</div>
-                          <div className="text-xs text-gray-500">{u.id}</div>
+                      <tr key={u.id} className="border-t border-white/10">
+                        <td className="py-3 px-4">
+                          <div className="flex items-start gap-3">
+                            <div className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-xs text-white/80 shrink-0">
+                              {initialsFromEmail(u.email)}
+                            </div>
+
+                            <div className="min-w-0">
+                              <div className="font-medium text-white/90 truncate">{u.email}</div>
+                              <div className="text-xs text-white/50 truncate">{u.id}</div>
+                            </div>
+                          </div>
                         </td>
 
-                        <td className="py-2 pr-4">
+                        <td className="py-3 px-4">
                           <select
                             value={draft}
                             onChange={(e) => {
                               const v = e.target.value;
                               if (isRole(v)) setDraftRole(u.id, v);
                             }}
-                            className="rounded-md border px-2 py-1 text-sm"
+                            className={cx(
+                              "rounded-xl border border-white/10 bg-white/5 px-2 py-2 text-sm",
+                              "text-white outline-none",
+                              "focus:ring-2 focus:ring-white/20"
+                            )}
                           >
                             <option value="USER">USER</option>
                             <option value="SCAN">SCAN</option>
                             <option value="ADMIN">ADMIN</option>
                           </select>
+
+                          {changed ? <div className="mt-2 text-xs text-white/60">Alterado</div> : null}
                         </td>
 
-                        <td className="py-2 pr-4">{u._count.favorites}</td>
-                        <td className="py-2 pr-4">{u._count.readingProgresses}</td>
+                        <td className="py-3 px-4 text-white/80">{u._count.favorites}</td>
+                        <td className="py-3 px-4 text-white/80">{u._count.readingProgresses}</td>
 
-                        <td className="py-2 pr-4">
+                        <td className="py-3 px-4">
                           <button
                             type="button"
-                            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+                            className={cx("btn-secondary", (!changed || isSaving) && "opacity-60")}
                             disabled={!changed || isSaving}
                             onClick={() => void saveRole(u.id)}
                           >
                             {isSaving ? "Salvando..." : "Salvar"}
                           </button>
 
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-white/50 mt-2">
                             Atualizado: {new Date(u.updatedAt).toLocaleString()}
                           </div>
                         </td>
@@ -327,6 +380,13 @@ export default function AdminClient({ me }: { me: User }) {
             </div>
           )}
         </section>
+
+        <div className="card p-4">
+          <p className="text-xs text-white/70">
+            Segurança: mantenha o papel <span className="font-medium text-white/85">ADMIN</span>{" "}
+            restrito e evite promover contas que você não controla.
+          </p>
+        </div>
       </div>
     </main>
   );

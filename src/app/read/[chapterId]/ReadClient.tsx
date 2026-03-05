@@ -32,6 +32,19 @@ function safeNumberFromQuery(value: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function cx(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+
+function formatChapterLabel(chapter: Chapter) {
+  const num = chapter.number != null ? `Cap. ${chapter.number}` : "Capítulo";
+  return `${num}${chapter.title ? ` — ${chapter.title}` : ""}`;
+}
+
 export default function ReadClient({ chapterId }: { chapterId: string }) {
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -49,6 +62,10 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
     pageIdx: -1,
     scrollY: -1,
   });
+
+  // UX: mostra/oculta topbar quando o usuário rola para baixo (modo cinema)
+  const [compactTopbar, setCompactTopbar] = useState<boolean>(false);
+  const lastScrollYForTopbar = useRef<number>(0);
 
   const initialParams = useMemo(() => {
     if (typeof window === "undefined") {
@@ -101,7 +118,7 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
           data.chapter.readMode === "PAGINATED" &&
           initialParams.p != null
         ) {
-          setPageIdx(Math.max(0, Math.min(data.chapter.pages.length - 1, initialParams.p)));
+          setPageIdx(clamp(initialParams.p, 0, Math.max(0, data.chapter.pages.length - 1)));
         } else {
           setPageIdx(0);
         }
@@ -142,14 +159,52 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
 
   const headerTitle = useMemo(() => {
     if (!chapter) return "Carregando...";
-    const num = chapter.number != null ? `Cap. ${chapter.number}` : "Capítulo";
-    return `${num}${chapter.title ? ` — ${chapter.title}` : ""}`;
+    return formatChapterLabel(chapter);
   }, [chapter]);
 
   const scanlatorLabel = useMemo(() => {
     if (!chapter) return null;
     return chapter.scanlator?.name ?? null;
   }, [chapter]);
+
+  const backHref = useMemo(() => {
+    if (!chapter) return "/works";
+    return `/works/${chapter.work.slug}`;
+  }, [chapter]);
+
+  const paginated = useMemo(() => {
+    if (!chapter) return false;
+    return chapter.kind === "IMAGES" && chapter.readMode === "PAGINATED";
+  }, [chapter]);
+
+  const isScrollMode = useMemo(() => {
+    if (!chapter) return false;
+    return (chapter.kind === "IMAGES" && chapter.readMode !== "PAGINATED") || chapter.kind === "TEXT";
+  }, [chapter]);
+
+  const totalPages = useMemo(() => {
+    if (!chapter) return 0;
+    return chapter.pages.length;
+  }, [chapter]);
+
+  const currentPage = useMemo(() => {
+    if (!chapter) return null;
+    return chapter.pages[pageIdx] ?? null;
+  }, [chapter, pageIdx]);
+
+  function goPrevPage() {
+    setPageIdx((p) => clamp(p - 1, 0, Math.max(0, totalPages - 1)));
+  }
+  function goNextPage() {
+    setPageIdx((p) => clamp(p + 1, 0, Math.max(0, totalPages - 1)));
+  }
+
+  function goPrevChapter() {
+    if (prevChapterId) window.location.href = `/read/${prevChapterId}`;
+  }
+  function goNextChapter() {
+    if (nextChapterId) window.location.href = `/read/${nextChapterId}`;
+  }
 
   async function saveProgress(
     mode: "SCROLL" | "PAGINATED",
@@ -173,20 +228,16 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
 
   useEffect(() => {
     if (!chapter) return;
-    if (!(chapter.kind === "IMAGES" && chapter.readMode === "PAGINATED")) return;
+    if (!paginated) return;
 
     if (lastSaved.current.pageIdx === pageIdx) return;
     lastSaved.current.pageIdx = pageIdx;
 
     void saveProgress("PAGINATED", pageIdx, null);
-  }, [pageIdx, chapter]);
+  }, [pageIdx, chapter, paginated]);
 
   useEffect(() => {
     if (!chapter) return;
-
-    const isScrollMode =
-      (chapter.kind === "IMAGES" && chapter.readMode !== "PAGINATED") || chapter.kind === "TEXT";
-
     if (!isScrollMode) return;
 
     const t = setInterval(() => {
@@ -198,7 +249,7 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
     }, 2000);
 
     return () => clearInterval(t);
-  }, [chapter]);
+  }, [chapter, isScrollMode]);
 
   useEffect(() => {
     if (!chapter) return;
@@ -218,24 +269,9 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
     return () => clearTimeout(t);
   }, [chapter]);
 
+  // Atalhos de teclado (mantém o comportamento atual)
   useEffect(() => {
     if (!chapter) return;
-
-    const paginated = chapter.kind === "IMAGES" && chapter.readMode === "PAGINATED";
-    const totalPages = chapter.pages.length;
-
-    function goPrevPage() {
-      setPageIdx((p) => Math.max(0, p - 1));
-    }
-    function goNextPage() {
-      setPageIdx((p) => Math.min(Math.max(0, totalPages - 1), p + 1));
-    }
-    function goPrevChapter() {
-      if (prevChapterId) window.location.href = `/read/${prevChapterId}`;
-    }
-    function goNextChapter() {
-      if (nextChapterId) window.location.href = `/read/${nextChapterId}`;
-    }
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -256,7 +292,37 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [chapter, prevChapterId, nextChapterId]);
+  }, [chapter, paginated, prevChapterId, nextChapterId, totalPages]);
+
+  // Modo cinema: colapsa topbar ao rolar para baixo, reabre ao rolar para cima
+  useEffect(() => {
+    if (!chapter) return;
+
+    lastScrollYForTopbar.current = Math.floor(window.scrollY || 0);
+    setCompactTopbar(false);
+
+    function onScroll() {
+      const y = Math.floor(window.scrollY || 0);
+      const prev = lastScrollYForTopbar.current;
+      lastScrollYForTopbar.current = y;
+
+      const delta = y - prev;
+
+      // ignora micro variação (trackpad)
+      if (Math.abs(delta) < 8) return;
+
+      if (y < 24) {
+        setCompactTopbar(false);
+        return;
+      }
+
+      if (delta > 0) setCompactTopbar(true); // descendo
+      if (delta < 0) setCompactTopbar(false); // subindo
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [chapterId, chapter]);
 
   if (loading) {
     return (
@@ -281,115 +347,159 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
     );
   }
 
-  const backHref = `/works/${chapter.work.slug}`;
-  const paginated = chapter.kind === "IMAGES" && chapter.readMode === "PAGINATED";
-  const totalPages = chapter.pages.length;
-  const currentPage = chapter.pages[pageIdx];
+  const headerSubtitle = `${chapter.work.title} • ${headerTitle}`;
+  const chapterKindLabel = chapter.kind === "IMAGES" ? "IMAGENS" : "TEXTO";
 
   return (
     <main className="text-gray-900">
-      {/* Reader topbar */}
-      <div className="sticky top-0 z-50 border-b bg-gray-950/90 text-white backdrop-blur">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 shrink-0">
-            <Link className="btn-secondary" href={backHref}>
-              ← Obra
-            </Link>
+      {/* Background / cinematic glow */}
+      <div className="fixed inset-0 -z-10 bg-gradient-to-b from-black via-zinc-950 to-black" />
+      <div className="fixed inset-0 -z-10 opacity-40">
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -bottom-56 left-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+        <div className="absolute -bottom-40 right-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+      </div>
 
-            <Link
-              className={`btn-secondary hidden sm:inline-flex ${
-                !prevChapterId ? "opacity-40 pointer-events-none" : ""
-              }`}
-              href={prevChapterId ? `/read/${prevChapterId}` : "#"}
-              aria-disabled={!prevChapterId}
-              title="Capítulo anterior (Shift+←)"
-            >
-              ⟵ Anterior
-            </Link>
-
-            <Link
-              className={`btn-secondary hidden sm:inline-flex ${
-                !nextChapterId ? "opacity-40 pointer-events-none" : ""
-              }`}
-              href={nextChapterId ? `/read/${nextChapterId}` : "#"}
-              aria-disabled={!nextChapterId}
-              title="Próximo capítulo (Shift+→)"
-            >
-              Próximo ⟶
-            </Link>
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold truncate">
-              {chapter.work.title} • {headerTitle}
-            </div>
-            {scanlatorLabel ? (
-              <div className="text-xs opacity-80 truncate">
-                Postado por: <span className="font-medium">{scanlatorLabel}</span>
-              </div>
-            ) : (
-              <div className="text-xs opacity-70 truncate">Postado por: —</div>
-            )}
-          </div>
-
-          {paginated ? (
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                className="btn-secondary"
-                disabled={pageIdx <= 0}
-                onClick={() => setPageIdx((p) => Math.max(0, p - 1))}
-                title="Página anterior (←)"
-              >
-                ◀
-              </button>
-
-              <span className="text-xs opacity-80 whitespace-nowrap">
-                {totalPages === 0 ? "0/0" : `${pageIdx + 1}/${totalPages}`}
-              </span>
-
-              <button
-                className="btn-secondary"
-                disabled={pageIdx >= totalPages - 1}
-                onClick={() => setPageIdx((p) => Math.min(totalPages - 1, p + 1))}
-                title="Próxima página (→)"
-              >
-                ▶
-              </button>
-            </div>
-          ) : (
-            <span className="text-xs opacity-80 shrink-0">
-              {chapter.kind === "IMAGES" ? "IMAGES" : "TEXT"}
-            </span>
+      {/* Reader topbar - glass */}
+      <div className="sticky top-0 z-50">
+        <div
+          className={cx(
+            "border-b border-white/10 bg-white/5 text-white backdrop-blur",
+            "shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
           )}
-        </div>
+        >
+          <div
+            className={cx(
+              "max-w-6xl mx-auto px-4 transition-all duration-200",
+              compactTopbar ? "py-2" : "py-3"
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 shrink-0">
+                <Link className="btn-secondary" href={backHref} title="Voltar para a obra">
+                  ← Obra
+                </Link>
 
-        {/* Mobile chapter nav */}
-        <div className="sm:hidden border-t border-white/10">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
-            <Link
-              className={`btn-secondary ${!prevChapterId ? "opacity-40 pointer-events-none" : ""}`}
-              href={prevChapterId ? `/read/${prevChapterId}` : "#"}
-              aria-disabled={!prevChapterId}
-            >
-              ⟵ Anterior
-            </Link>
+                <Link
+                  className={cx(
+                    "btn-secondary hidden sm:inline-flex",
+                    !prevChapterId && "opacity-40 pointer-events-none"
+                  )}
+                  href={prevChapterId ? `/read/${prevChapterId}` : "#"}
+                  aria-disabled={!prevChapterId}
+                  title="Capítulo anterior (Shift+←)"
+                >
+                  ⟵ Anterior
+                </Link>
 
-            <Link
-              className={`btn-secondary ${!nextChapterId ? "opacity-40 pointer-events-none" : ""}`}
-              href={nextChapterId ? `/read/${nextChapterId}` : "#"}
-              aria-disabled={!nextChapterId}
-            >
-              Próximo ⟶
-            </Link>
+                <Link
+                  className={cx(
+                    "btn-secondary hidden sm:inline-flex",
+                    !nextChapterId && "opacity-40 pointer-events-none"
+                  )}
+                  href={nextChapterId ? `/read/${nextChapterId}` : "#"}
+                  aria-disabled={!nextChapterId}
+                  title="Próximo capítulo (Shift+→)"
+                >
+                  Próximo ⟶
+                </Link>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className={cx("truncate font-semibold", compactTopbar ? "text-sm" : "text-sm")}>
+                  {headerSubtitle}
+                </div>
+
+                <div className={cx("truncate", compactTopbar ? "hidden" : "block")}>
+                  {scanlatorLabel ? (
+                    <div className="text-xs text-white/75">
+                      Postado por: <span className="font-medium text-white/90">{scanlatorLabel}</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-white/60">Postado por: —</div>
+                  )}
+                </div>
+              </div>
+
+              {paginated ? (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    className="btn-secondary"
+                    disabled={pageIdx <= 0}
+                    onClick={goPrevPage}
+                    title="Página anterior (←)"
+                  >
+                    ◀
+                  </button>
+
+                  <span className="text-xs text-white/75 whitespace-nowrap">
+                    {totalPages === 0 ? "0/0" : `${pageIdx + 1}/${totalPages}`}
+                  </span>
+
+                  <button
+                    className="btn-secondary"
+                    disabled={pageIdx >= totalPages - 1}
+                    onClick={goNextPage}
+                    title="Próxima página (→)"
+                  >
+                    ▶
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs text-white/70 shrink-0">{chapterKindLabel}</span>
+              )}
+            </div>
+
+            {/* Mobile chapter nav */}
+            <div className={cx("sm:hidden transition-all", compactTopbar ? "hidden" : "block")}>
+              <div className="mt-3 border-t border-white/10 pt-3 flex items-center justify-between gap-2">
+                <Link
+                  className={cx("btn-secondary", !prevChapterId && "opacity-40 pointer-events-none")}
+                  href={prevChapterId ? `/read/${prevChapterId}` : "#"}
+                  aria-disabled={!prevChapterId}
+                >
+                  ⟵ Anterior
+                </Link>
+
+                <Link
+                  className={cx("btn-secondary", !nextChapterId && "opacity-40 pointer-events-none")}
+                  href={nextChapterId ? `/read/${nextChapterId}` : "#"}
+                  aria-disabled={!nextChapterId}
+                >
+                  Próximo ⟶
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
+
+        {/* subtle gradient separator */}
+        <div className="h-6 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />
       </div>
 
       {/* Reader body */}
-      <div className={`${chapter.kind === "IMAGES" ? "bg-gray-900" : ""}`}>
+      <div className={cx(chapter.kind === "IMAGES" && "bg-transparent")}>
         <div className="max-w-4xl mx-auto px-2 sm:px-4 py-4 space-y-4">
+          {/* Chapter meta card */}
+          <div className="card p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold truncate text-white/95">
+                  {chapter.work.title}
+                </div>
+                <div className="text-xs text-white/70 truncate">{headerTitle}</div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="chip">{chapter.kind === "IMAGES" ? "IMAGES" : "TEXT"}</span>
+                <span className="chip">{paginated ? "PAGINATED" : "SCROLL"}</span>
+                {scanlatorLabel ? <span className="chip">by {scanlatorLabel}</span> : null}
+              </div>
+            </div>
+          </div>
+
           {chapter.kind === "TEXT" ? (
-            <article className="card p-5 whitespace-pre-wrap leading-relaxed">
+            <article className="card p-5 whitespace-pre-wrap leading-relaxed text-white/90">
               {chapter.text?.content || "Sem conteúdo."}
             </article>
           ) : null}
@@ -399,18 +509,15 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
               {chapter.pages.map((p) => (
                 <div
                   key={p.index}
-                  className="overflow-hidden rounded-xl border border-white/10 bg-black/30 shadow-sm"
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-black/30 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={p.imageUrl}
-                    alt={`Página ${p.index + 1}`}
-                    className="w-full h-auto"
-                  />
+                  <img src={p.imageUrl} alt={`Página ${p.index + 1}`} className="w-full h-auto" />
                 </div>
               ))}
+
               {chapter.pages.length === 0 ? (
-                <div className="rounded-xl border border-white/10 bg-black/30 p-4 text-white/80">
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-white/80">
                   Sem páginas.
                 </div>
               ) : null}
@@ -418,51 +525,85 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
           ) : null}
 
           {chapter.kind === "IMAGES" && paginated ? (
-            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/30 shadow-sm">
-              {currentPage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={currentPage.imageUrl}
-                  alt={`Página ${pageIdx + 1}`}
-                  className="w-full h-auto"
-                />
-              ) : (
-                <div className="p-4 text-white/80">Sem páginas.</div>
-              )}
+            <div className="space-y-3">
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                {currentPage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={currentPage.imageUrl}
+                    alt={`Página ${pageIdx + 1}`}
+                    className="w-full h-auto"
+                  />
+                ) : (
+                  <div className="p-4 text-white/80">Sem páginas.</div>
+                )}
+              </div>
+
+              {/* Paginado - controle inferior premium */}
+              <div className="card p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    className="btn-secondary"
+                    disabled={pageIdx <= 0}
+                    onClick={goPrevPage}
+                    title="Página anterior (←)"
+                  >
+                    ◀ Página
+                  </button>
+
+                  <div className="text-xs text-white/75">
+                    {totalPages === 0 ? "0/0" : `${pageIdx + 1} de ${totalPages}`}
+                  </div>
+
+                  <button
+                    className="btn-secondary"
+                    disabled={pageIdx >= totalPages - 1}
+                    onClick={goNextPage}
+                    title="Próxima página (→)"
+                  >
+                    Página ▶
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
 
           {/* Bottom nav */}
-          <div
-            className={`flex items-center justify-between gap-2 pt-2 ${
-              chapter.kind === "IMAGES" ? "text-white" : ""
-            }`}
-          >
-            <Link
-              className={`btn-secondary ${!prevChapterId ? "opacity-40 pointer-events-none" : ""}`}
-              href={prevChapterId ? `/read/${prevChapterId}` : "#"}
-              aria-disabled={!prevChapterId}
-            >
-              ⟵ Capítulo anterior
-            </Link>
+          <div className="card p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <Link
+                  className={cx("btn-secondary", !prevChapterId && "opacity-40 pointer-events-none")}
+                  href={prevChapterId ? `/read/${prevChapterId}` : "#"}
+                  aria-disabled={!prevChapterId}
+                >
+                  ⟵ Capítulo anterior
+                </Link>
 
-            <Link className={`${chapter.kind === "IMAGES" ? "underline text-white" : "underline"}`} href={backHref}>
-              Voltar pra obra
-            </Link>
+                <Link className={cx("btn-ghost")} href={backHref}>
+                  Voltar pra obra
+                </Link>
+              </div>
 
-            <Link
-              className={`btn-secondary ${!nextChapterId ? "opacity-40 pointer-events-none" : ""}`}
-              href={nextChapterId ? `/read/${nextChapterId}` : "#"}
-              aria-disabled={!nextChapterId}
-            >
-              Próximo capítulo ⟶
-            </Link>
+              <div className="flex items-center justify-between gap-2 sm:justify-end">
+                <Link
+                  className={cx("btn-secondary", !nextChapterId && "opacity-40 pointer-events-none")}
+                  href={nextChapterId ? `/read/${nextChapterId}` : "#"}
+                  aria-disabled={!nextChapterId}
+                >
+                  Próximo capítulo ⟶
+                </Link>
+              </div>
+            </div>
+
+            <p className="mt-3 text-xs text-white/70">
+              Dica: <span className="font-medium text-white/85">←/→</span> muda página (modo paginado).{" "}
+              <span className="font-medium text-white/85">Shift + ←/→</span> muda capítulo.
+            </p>
           </div>
 
-          <p className={`${chapter.kind === "IMAGES" ? "text-white/70" : "text-gray-500"} text-xs`}>
-            Dica: <span className="font-medium">←/→</span> muda página (modo paginado).{" "}
-            <span className="font-medium">Shift + ←/→</span> muda capítulo.
-          </p>
+          {/* Spacer para não “colar” o fim no fundo */}
+          <div className="h-6" />
         </div>
       </div>
     </main>

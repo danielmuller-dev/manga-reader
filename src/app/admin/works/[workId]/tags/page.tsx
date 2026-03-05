@@ -9,23 +9,41 @@ export default async function AdminWorkTagsPage({
   params: Promise<{ workId: string }>;
 }) {
   const auth = await requireRole(["ADMIN"]);
+
   if (!auth.ok) {
     return (
-      <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-        <div className="max-w-3xl mx-auto space-y-3">
-          <h1 className="text-2xl font-semibold">Tags da Obra</h1>
-          <p className="text-red-600">
-            {auth.user === null
-              ? "Você precisa estar logado."
-              : "Sem permissão para acessar esta página."}
-          </p>
-          <div className="flex gap-3">
-            <Link className="underline" href="/">
-              Home
-            </Link>
-            <Link className="underline" href="/admin">
-              Admin
-            </Link>
+      <main className="min-h-screen text-white">
+        {/* Background */}
+        <div className="fixed inset-0 -z-10 bg-gradient-to-b from-black via-zinc-950 to-black" />
+        <div className="fixed inset-0 -z-10 opacity-40">
+          <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute -bottom-56 left-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+          <div className="absolute -bottom-40 right-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+        </div>
+
+        <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold">Tags da Obra</h1>
+              <p className="muted mt-1 text-sm">Área administrativa.</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Link className="btn-secondary" href="/">
+                Home
+              </Link>
+              <Link className="btn-secondary" href="/admin">
+                Admin
+              </Link>
+            </div>
+          </header>
+
+          <div className="card p-6">
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+              {auth.user === null
+                ? "Você precisa estar logado."
+                : "Sem permissão para acessar esta página."}
+            </div>
           </div>
         </div>
       </main>
@@ -36,13 +54,31 @@ export default async function AdminWorkTagsPage({
 
   if (!workId) {
     return (
-      <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-        <div className="max-w-3xl mx-auto space-y-3">
-          <h1 className="text-2xl font-semibold">Tags da Obra</h1>
-          <p className="text-red-600">workId inválido.</p>
-          <Link className="underline" href="/admin/works">
-            Voltar
-          </Link>
+      <main className="min-h-screen text-white">
+        {/* Background */}
+        <div className="fixed inset-0 -z-10 bg-gradient-to-b from-black via-zinc-950 to-black" />
+        <div className="fixed inset-0 -z-10 opacity-40">
+          <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute -bottom-56 left-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+          <div className="absolute -bottom-40 right-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+        </div>
+
+        <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
+          <header>
+            <h1 className="text-2xl font-semibold">Tags da Obra</h1>
+          </header>
+
+          <div className="card p-6">
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+              workId inválido.
+            </div>
+
+            <div className="mt-4">
+              <Link className="btn-secondary" href="/admin/works">
+                Voltar
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
     );
@@ -55,46 +91,68 @@ export default async function AdminWorkTagsPage({
 
   if (!work) {
     return (
-      <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-        <div className="max-w-3xl mx-auto space-y-3">
-          <h1 className="text-2xl font-semibold">Tags da Obra</h1>
-          <p className="text-red-600">Obra não encontrada.</p>
-          <Link className="underline" href="/admin/works">
-            Voltar
-          </Link>
+      <main className="min-h-screen text-white">
+        {/* Background */}
+        <div className="fixed inset-0 -z-10 bg-gradient-to-b from-black via-zinc-950 to-black" />
+        <div className="fixed inset-0 -z-10 opacity-40">
+          <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute -bottom-56 left-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+          <div className="absolute -bottom-40 right-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+        </div>
+
+        <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
+          <header>
+            <h1 className="text-2xl font-semibold">Tags da Obra</h1>
+          </header>
+
+          <div className="card p-6">
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+              Obra não encontrada.
+            </div>
+
+            <div className="mt-4">
+              <Link className="btn-secondary" href="/admin/works">
+                Voltar
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-start justify-between gap-3">
+    <main className="min-h-screen text-white">
+      {/* Background */}
+      <div className="fixed inset-0 -z-10 bg-gradient-to-b from-black via-zinc-950 to-black" />
+      <div className="fixed inset-0 -z-10 opacity-40">
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -bottom-56 left-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+        <div className="absolute -bottom-40 right-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Tags da Obra</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Obra: <b>{work.title}</b>
+            <p className="muted mt-1 text-sm">
+              Obra: <span className="font-medium text-white/90">{work.title}</span>
             </p>
           </div>
 
-          <div className="flex gap-2">
-            <Link
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-              href="/admin/works"
-            >
+          <div className="flex flex-wrap gap-2">
+            <Link className="btn-secondary" href="/admin/works">
               Voltar
             </Link>
-            <Link
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-              href={`/works/${work.slug}`}
-            >
+            <Link className="btn-secondary" href={`/works/${work.slug}`}>
               Ver obra
             </Link>
           </div>
-        </div>
+        </header>
 
-        <TagManagerClient workId={work.id} />
+        <section className="card p-6">
+          <TagManagerClient workId={work.id} />
+        </section>
       </div>
     </main>
   );

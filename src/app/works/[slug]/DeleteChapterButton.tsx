@@ -32,13 +32,21 @@ export default function DeleteChapterButton({ chapterId }: { chapterId: string }
   return (
     <div className="flex flex-col items-end gap-1">
       <button
+        type="button"
         onClick={onDelete}
         disabled={loading}
-        className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+        className={[
+          "rounded-xl px-3 py-2 text-sm transition disabled:opacity-60",
+          "border border-white/10 bg-white/5 text-white/80",
+          "hover:bg-white/10 hover:text-white",
+          "focus:outline-none focus:ring-2 focus:ring-white/15",
+        ].join(" ")}
+        title="Excluir capítulo"
       >
         {loading ? "Excluindo..." : "Excluir"}
       </button>
-      {err && <span className="text-xs text-red-600">{err}</span>}
+
+      {err && <span className="text-xs text-red-400">{err}</span>}
     </div>
   );
 }

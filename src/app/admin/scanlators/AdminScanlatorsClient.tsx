@@ -69,6 +69,10 @@ type RemoveMemberBody = { userId: string } | { email: string };
 
 type RemoveMemberResponse = { ok: true } | { error: string };
 
+function cx(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+
 function slugify(input: string): string {
   const s = input
     .trim()
@@ -91,6 +95,15 @@ function roleLabel(r: MemberRole): string {
   if (r === "OWNER") return "Owner";
   if (r === "UPLOADER") return "Uploader";
   return "Editor";
+}
+
+function userInitials(label: string) {
+  const s = label.trim();
+  if (!s) return "U";
+  const left = s.split("@")[0] || "u";
+  const a = left[0]?.toUpperCase() ?? "U";
+  const b = left[1]?.toUpperCase() ?? "";
+  return `${a}${b}`;
 }
 
 export default function AdminScanlatorsClient({ me }: { me: User }) {
@@ -174,14 +187,20 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
       }
 
       if (!("members" in data)) {
-        setMembersErrorByScanlator((prev) => ({ ...prev, [scanlatorId]: "Resposta inválida do servidor." }));
+        setMembersErrorByScanlator((prev) => ({
+          ...prev,
+          [scanlatorId]: "Resposta inválida do servidor.",
+        }));
         setMembersByScanlator((prev) => ({ ...prev, [scanlatorId]: [] }));
         return;
       }
 
       setMembersByScanlator((prev) => ({ ...prev, [scanlatorId]: data.members }));
     } catch {
-      setMembersErrorByScanlator((prev) => ({ ...prev, [scanlatorId]: "Falha de rede ao buscar membros." }));
+      setMembersErrorByScanlator((prev) => ({
+        ...prev,
+        [scanlatorId]: "Falha de rede ao buscar membros.",
+      }));
       setMembersByScanlator((prev) => ({ ...prev, [scanlatorId]: [] }));
     } finally {
       setMembersLoadingByScanlator((prev) => ({ ...prev, [scanlatorId]: false }));
@@ -202,7 +221,6 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
     }
 
     const role: MemberRole = addRoleByScanlator[scanlatorId] ?? "EDITOR";
-
     const body: AddMemberBody = { email, role };
 
     setAddLoadingByScanlator((prev) => ({ ...prev, [scanlatorId]: true }));
@@ -222,7 +240,10 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
       }
 
       if (!("member" in data)) {
-        setMembersErrorByScanlator((prev) => ({ ...prev, [scanlatorId]: "Resposta inválida do servidor." }));
+        setMembersErrorByScanlator((prev) => ({
+          ...prev,
+          [scanlatorId]: "Resposta inválida do servidor.",
+        }));
         return;
       }
 
@@ -234,7 +255,10 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
       await loadMembers(scanlatorId);
       await loadScanlators(); // atualiza contadores
     } catch {
-      setMembersErrorByScanlator((prev) => ({ ...prev, [scanlatorId]: "Falha de rede ao adicionar membro." }));
+      setMembersErrorByScanlator((prev) => ({
+        ...prev,
+        [scanlatorId]: "Falha de rede ao adicionar membro.",
+      }));
     } finally {
       setAddLoadingByScanlator((prev) => ({ ...prev, [scanlatorId]: false }));
     }
@@ -264,7 +288,10 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
       }
 
       if (!("ok" in data)) {
-        setMembersErrorByScanlator((prev) => ({ ...prev, [scanlatorId]: "Resposta inválida do servidor." }));
+        setMembersErrorByScanlator((prev) => ({
+          ...prev,
+          [scanlatorId]: "Resposta inválida do servidor.",
+        }));
         return;
       }
 
@@ -273,7 +300,10 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
       await loadMembers(scanlatorId);
       await loadScanlators(); // atualiza contadores
     } catch {
-      setMembersErrorByScanlator((prev) => ({ ...prev, [scanlatorId]: "Falha de rede ao remover membro." }));
+      setMembersErrorByScanlator((prev) => ({
+        ...prev,
+        [scanlatorId]: "Falha de rede ao remover membro.",
+      }));
     } finally {
       setRemoveLoadingByMemberId((prev) => ({ ...prev, [member.id]: false }));
     }
@@ -360,93 +390,140 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
     }
   }
 
+  const topMsgClass = useMemo(() => {
+    if (error) return "border-red-500/30 bg-red-500/10 text-red-200";
+    if (okMsg) return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+    return null;
+  }, [error, okMsg]);
+
   return (
-    <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-start justify-between gap-4">
+    <main className="min-h-screen text-white">
+      {/* Background */}
+      <div className="fixed inset-0 -z-10 bg-gradient-to-b from-black via-zinc-950 to-black" />
+      <div className="fixed inset-0 -z-10 opacity-40">
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -bottom-56 left-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+        <div className="absolute -bottom-40 right-10 h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 py-10 space-y-6">
+        {/* Header */}
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Admin • Scanlators</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Logado como {me.name ?? me.email} ({me.role})
+            <p className="muted mt-1 text-sm">
+              Logado como{" "}
+              <span className="font-medium text-white/90">{me.name ?? me.email}</span>{" "}
+              <span className="text-white/50">({me.role})</span>
             </p>
           </div>
 
-          <div className="flex gap-2">
-            <Link
-              href="/admin"
-              className="rounded-md border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-            >
+          <div className="flex flex-wrap gap-2">
+            <Link className="btn-secondary" href="/admin">
               Voltar
             </Link>
+            <Link className="btn-secondary" href="/scanlators">
+              Ver Scanlators
+            </Link>
           </div>
-        </div>
+        </header>
 
-        <section className="rounded-lg border bg-white p-4 space-y-4">
-          <div>
-            <div className="text-sm font-semibold">Criar scanlator</div>
-            <p className="text-sm text-gray-600 mt-1">
-              Preencha os dados básicos. O slug precisa ser único.
-            </p>
+        {/* Global messages */}
+        {topMsgClass ? (
+          <div className={cx("rounded-2xl border p-4 text-sm", topMsgClass)}>
+            {error ?? okMsg}
+          </div>
+        ) : null}
+
+        {/* Create */}
+        <section className="card p-5 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-white/90">Criar scanlator</div>
+              <p className="muted mt-1 text-sm">
+                Preencha os dados básicos. O slug precisa ser único.
+              </p>
+            </div>
+            <span className="chip">Create</span>
           </div>
 
-          <form onSubmit={createScanlator} className="grid gap-3">
+          <form onSubmit={(e) => void createScanlator(e)} className="grid gap-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium">Nome</label>
+                <label className="block text-sm font-medium text-white/80">Nome</label>
                 <input
-                  className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                  className={cx(
+                    "mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+                    "text-white placeholder:text-white/40 outline-none",
+                    "focus:ring-2 focus:ring-white/20"
+                  )}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: MinhaScan"
                   required
+                  disabled={creating}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium">Slug</label>
+                <label className="block text-sm font-medium text-white/80">Slug</label>
                 <input
-                  className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                  className={cx(
+                    "mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+                    "text-white placeholder:text-white/40 outline-none",
+                    "focus:ring-2 focus:ring-white/20"
+                  )}
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
                   placeholder="Ex: minha-scan"
                   required
+                  disabled={creating}
                 />
-                <div className="mt-1 text-xs text-gray-500">
-                  URL ficará: <span className="font-mono">/scanlators/{slugify(slug || name)}</span>
+                <div className="mt-1 text-xs text-white/50">
+                  URL ficará:{" "}
+                  <span className="font-mono text-white/70">
+                    /scanlators/{slugify(slug || name)}
+                  </span>
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium">Descrição (opcional)</label>
+              <label className="block text-sm font-medium text-white/80">Descrição (opcional)</label>
               <textarea
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                className={cx(
+                  "mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+                  "text-white placeholder:text-white/40 outline-none",
+                  "focus:ring-2 focus:ring-white/20"
+                )}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Sobre a scan..."
                 rows={3}
+                disabled={creating}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium">Logo URL (opcional)</label>
+              <label className="block text-sm font-medium text-white/80">Logo URL (opcional)</label>
               <input
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                className={cx(
+                  "mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+                  "text-white placeholder:text-white/40 outline-none",
+                  "focus:ring-2 focus:ring-white/20"
+                )}
                 value={logoUrl}
                 onChange={(e) => setLogoUrl(e.target.value)}
                 placeholder="https://..."
+                disabled={creating}
               />
+              <p className="muted mt-2 text-xs">
+                Futuro: aqui entra Vercel Blob (upload de logo e capas), mantendo URLs estáveis.
+              </p>
             </div>
 
-            {error ? <div className="text-sm text-red-600">{error}</div> : null}
-            {okMsg ? <div className="text-sm text-emerald-700">{okMsg}</div> : null}
-
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={creating}
-                className="rounded-md bg-black px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-60"
-              >
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={creating} className={cx("btn-primary", creating && "opacity-70")}>
                 {creating ? "Criando..." : "Criar scanlator"}
               </button>
 
@@ -454,7 +531,7 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
                 type="button"
                 onClick={() => void loadScanlators()}
                 disabled={loading}
-                className="rounded-md border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+                className={cx("btn-secondary", loading && "opacity-70")}
               >
                 {loading ? "Carregando..." : "Recarregar lista"}
               </button>
@@ -462,41 +539,47 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
           </form>
         </section>
 
-        <section className="rounded-lg border bg-white p-4 space-y-4">
+        {/* List */}
+        <section className="card p-5 space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-sm font-semibold">Scanlators existentes</div>
-              <p className="text-sm text-gray-600 mt-1">Total: {scanlators.length}</p>
+              <div className="text-sm font-semibold text-white/90">Scanlators existentes</div>
+              <p className="muted mt-1 text-sm">Total: {scanlators.length}</p>
             </div>
 
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filtrar por nome/slug/id…"
-              className="w-full sm:w-[320px] rounded-md border px-3 py-2 text-sm"
+              className={cx(
+                "w-full sm:w-[360px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+                "text-white placeholder:text-white/40 outline-none",
+                "focus:ring-2 focus:ring-white/20"
+              )}
             />
           </div>
 
-          {loading ? <div className="text-sm text-gray-600">Carregando…</div> : null}
+          {loading ? <div className="muted text-sm">Carregando…</div> : null}
 
           {!loading && filtered.length === 0 ? (
-            <div className="text-sm text-gray-600">Nenhuma scanlator encontrada.</div>
+            <div className="muted text-sm">Nenhuma scanlator encontrada.</div>
           ) : null}
 
           {!loading && filtered.length > 0 ? (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-2xl border border-white/10">
               <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b">
-                    <th className="py-2 pr-4">Nome</th>
-                    <th className="py-2 pr-4">Slug</th>
-                    <th className="py-2 pr-4">Membros</th>
-                    <th className="py-2 pr-4">Obras</th>
-                    <th className="py-2 pr-4">Capítulos</th>
-                    <th className="py-2 pr-4">Link</th>
-                    <th className="py-2 pr-4">Ações</th>
+                <thead className="bg-white/5">
+                  <tr className="text-left text-white/80">
+                    <th className="py-3 px-4">Nome</th>
+                    <th className="py-3 px-4">Slug</th>
+                    <th className="py-3 px-4">Membros</th>
+                    <th className="py-3 px-4">Obras</th>
+                    <th className="py-3 px-4">Capítulos</th>
+                    <th className="py-3 px-4">Link</th>
+                    <th className="py-3 px-4">Ações</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {filtered.map((s) => {
                     const isOpen = openId === s.id;
@@ -510,36 +593,58 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
 
                     return (
                       <>
-                        <tr key={s.id} className="border-b">
-                          <td className="py-2 pr-4">
-                            <div className="font-medium">{s.name}</div>
-                            <div className="text-xs text-gray-500">{s.id}</div>
+                        <tr key={s.id} className="border-t border-white/10">
+                          <td className="py-3 px-4">
+                            <div className="flex items-start gap-3">
+                              <div className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 overflow-hidden flex items-center justify-center text-xs text-white/70 shrink-0">
+                                {s.logoUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={s.logoUrl}
+                                    alt={s.name}
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
+                                ) : (
+                                  <span>{userInitials(s.name)}</span>
+                                )}
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="font-medium text-white/90 truncate">{s.name}</div>
+                                <div className="text-xs text-white/50 truncate">{s.id}</div>
+                                {s.description ? (
+                                  <div className="mt-1 text-xs text-white/60 line-clamp-2">
+                                    {s.description}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
                           </td>
-                          <td className="py-2 pr-4 font-mono">{s.slug}</td>
-                          <td className="py-2 pr-4">{s._count.members}</td>
-                          <td className="py-2 pr-4">{s._count.works}</td>
-                          <td className="py-2 pr-4">{s._count.chapters}</td>
-                          <td className="py-2 pr-4">
-                            <Link className="underline" href={`/scanlators/${s.slug}`}>
+
+                          <td className="py-3 px-4 font-mono text-white/80">{s.slug}</td>
+                          <td className="py-3 px-4 text-white/80">{s._count.members}</td>
+                          <td className="py-3 px-4 text-white/80">{s._count.works}</td>
+                          <td className="py-3 px-4 text-white/80">{s._count.chapters}</td>
+
+                          <td className="py-3 px-4">
+                            <Link className="btn-secondary" href={`/scanlators/${s.slug}`}>
                               Abrir
                             </Link>
                           </td>
-                          <td className="py-2 pr-4">
+
+                          <td className="py-3 px-4">
                             <button
                               type="button"
-                              className="rounded-md border bg-white px-3 py-1.5 text-xs hover:bg-gray-50"
+                              className="btn-secondary"
                               onClick={() => {
                                 setOkMsg(null);
                                 setMembersErrorByScanlator((prev) => ({ ...prev, [s.id]: null }));
-
                                 setOpenId((prev) => (prev === s.id ? null : s.id));
 
-                                const alreadyLoaded = (membersByScanlator[s.id] ?? null) !== null;
                                 const hasData = Array.isArray(membersByScanlator[s.id]);
                                 if (!isOpen && (!hasData || membersByScanlator[s.id] === undefined)) {
-                                  void loadMembers(s.id);
-                                }
-                                if (!isOpen && alreadyLoaded && membersByScanlator[s.id] === undefined) {
                                   void loadMembers(s.id);
                                 }
                               }}
@@ -550,13 +655,15 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
                         </tr>
 
                         {isOpen ? (
-                          <tr key={`${s.id}-members`} className="border-b bg-gray-50/50">
-                            <td colSpan={7} className="py-3 pr-4">
-                              <div className="grid gap-3">
-                                <div className="flex items-start justify-between gap-3">
+                          <tr key={`${s.id}-members`} className="border-t border-white/10 bg-white/5">
+                            <td colSpan={7} className="p-4">
+                              <div className="grid gap-4">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                   <div>
-                                    <div className="text-sm font-semibold">Membros • {s.name}</div>
-                                    <div className="text-xs text-gray-600">
+                                    <div className="text-sm font-semibold text-white/90">
+                                      Membros • {s.name}
+                                    </div>
+                                    <div className="muted mt-1 text-xs">
                                       Adicione por email e defina a role dentro da scanlator.
                                     </div>
                                   </div>
@@ -565,7 +672,7 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
                                     type="button"
                                     onClick={() => void loadMembers(s.id)}
                                     disabled={mLoading}
-                                    className="rounded-md border bg-white px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-60"
+                                    className={cx("btn-secondary", mLoading && "opacity-70")}
                                   >
                                     {mLoading ? "Atualizando..." : "Recarregar membros"}
                                   </button>
@@ -573,12 +680,18 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
 
                                 <form
                                   onSubmit={(e) => void addMember(s.id, e)}
-                                  className="grid gap-2 sm:grid-cols-[1fr_180px_auto]"
+                                  className="grid gap-2 sm:grid-cols-[1fr_220px_auto]"
                                 >
                                   <div>
-                                    <label className="block text-xs font-medium">Email do usuário</label>
+                                    <label className="block text-xs font-medium text-white/80">
+                                      Email do usuário
+                                    </label>
                                     <input
-                                      className="mt-1 w-full rounded-md border px-3 py-2 text-sm bg-white"
+                                      className={cx(
+                                        "mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+                                        "text-white placeholder:text-white/40 outline-none",
+                                        "focus:ring-2 focus:ring-white/20"
+                                      )}
                                       value={addEmail}
                                       onChange={(e) =>
                                         setAddEmailByScanlator((prev) => ({
@@ -587,18 +700,24 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
                                         }))
                                       }
                                       placeholder="email@dominio.com"
+                                      disabled={addLoading}
                                     />
                                   </div>
 
                                   <div>
-                                    <label className="block text-xs font-medium">Role</label>
+                                    <label className="block text-xs font-medium text-white/80">Role</label>
                                     <select
-                                      className="mt-1 w-full rounded-md border px-3 py-2 text-sm bg-white"
+                                      className={cx(
+                                        "mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+                                        "text-white outline-none",
+                                        "focus:ring-2 focus:ring-white/20"
+                                      )}
                                       value={addRole}
                                       onChange={(e) => {
                                         const v = e.target.value as MemberRole;
                                         setAddRoleByScanlator((prev) => ({ ...prev, [s.id]: v }));
                                       }}
+                                      disabled={addLoading}
                                     >
                                       <option value="OWNER">OWNER</option>
                                       <option value="EDITOR">EDITOR</option>
@@ -610,56 +729,78 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
                                     <button
                                       type="submit"
                                       disabled={addLoading}
-                                      className="w-full sm:w-auto rounded-md bg-black px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-60"
+                                      className={cx("btn-primary", addLoading && "opacity-70")}
                                     >
                                       {addLoading ? "Adicionando..." : "Adicionar"}
                                     </button>
                                   </div>
                                 </form>
 
-                                {mError ? <div className="text-sm text-red-600">{mError}</div> : null}
-                                {okMsg ? <div className="text-sm text-emerald-700">{okMsg}</div> : null}
-
-                                {mLoading ? (
-                                  <div className="text-sm text-gray-600">Carregando membros…</div>
+                                {mError ? (
+                                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                                    {mError}
+                                  </div>
                                 ) : null}
 
+                                {okMsg ? (
+                                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                                    {okMsg}
+                                  </div>
+                                ) : null}
+
+                                {mLoading ? <div className="muted text-sm">Carregando membros…</div> : null}
+
                                 {!mLoading && members.length === 0 ? (
-                                  <div className="text-sm text-gray-600">Nenhum membro cadastrado ainda.</div>
+                                  <div className="muted text-sm">Nenhum membro cadastrado ainda.</div>
                                 ) : null}
 
                                 {!mLoading && members.length > 0 ? (
-                                  <div className="overflow-x-auto rounded-md border bg-white">
+                                  <div className="overflow-x-auto rounded-2xl border border-white/10">
                                     <table className="min-w-full text-sm">
-                                      <thead>
-                                        <tr className="text-left border-b">
-                                          <th className="py-2 px-3">Usuário</th>
-                                          <th className="py-2 px-3">Role (scanlator)</th>
-                                          <th className="py-2 px-3">Criado em</th>
-                                          <th className="py-2 px-3">Ações</th>
+                                      <thead className="bg-white/5">
+                                        <tr className="text-left text-white/80">
+                                          <th className="py-3 px-4">Usuário</th>
+                                          <th className="py-3 px-4">Role (scanlator)</th>
+                                          <th className="py-3 px-4">Criado em</th>
+                                          <th className="py-3 px-4">Ações</th>
                                         </tr>
                                       </thead>
                                       <tbody>
                                         {members.map((m) => {
                                           const removing = removeLoadingByMemberId[m.id] ?? false;
+                                          const label = m.user.name ?? m.user.email;
                                           return (
-                                            <tr key={m.id} className="border-b last:border-b-0">
-                                              <td className="py-2 px-3">
-                                                <div className="font-medium">{m.user.name ?? m.user.email}</div>
-                                                <div className="text-xs text-gray-500">
-                                                  {m.user.email} • userRole: {m.user.role}
+                                            <tr key={m.id} className="border-t border-white/10">
+                                              <td className="py-3 px-4">
+                                                <div className="flex items-start gap-3">
+                                                  <div className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-xs text-white/70 shrink-0">
+                                                    {userInitials(m.user.email)}
+                                                  </div>
+                                                  <div className="min-w-0">
+                                                    <div className="font-medium text-white/90 truncate">
+                                                      {label}
+                                                    </div>
+                                                    <div className="text-xs text-white/50 truncate">
+                                                      {m.user.email} • userRole: {m.user.role}
+                                                    </div>
+                                                  </div>
                                                 </div>
                                               </td>
-                                              <td className="py-2 px-3 font-mono">{m.role}</td>
-                                              <td className="py-2 px-3 text-xs text-gray-600">
+
+                                              <td className="py-3 px-4">
+                                                <span className="chip">{roleLabel(m.role)}</span>
+                                              </td>
+
+                                              <td className="py-3 px-4 text-xs text-white/60">
                                                 {new Date(m.createdAt).toLocaleString("pt-BR")}
                                               </td>
-                                              <td className="py-2 px-3">
+
+                                              <td className="py-3 px-4">
                                                 <button
                                                   type="button"
                                                   disabled={removing}
                                                   onClick={() => void removeMember(s.id, m)}
-                                                  className="rounded-md border px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-60"
+                                                  className={cx("btn-secondary", removing && "opacity-70")}
                                                 >
                                                   {removing ? "Removendo..." : "Remover"}
                                                 </button>
@@ -683,6 +824,14 @@ export default function AdminScanlatorsClient({ me }: { me: User }) {
             </div>
           ) : null}
         </section>
+
+        <div className="card p-4">
+          <p className="text-xs text-white/70">
+            Dica: mantenha pelo menos 1 <span className="font-medium text-white/85">OWNER</span> por
+            equipe. Para uploads de capítulos, use{" "}
+            <span className="font-medium text-white/85">UPLOADER</span>.
+          </p>
+        </div>
       </div>
     </main>
   );

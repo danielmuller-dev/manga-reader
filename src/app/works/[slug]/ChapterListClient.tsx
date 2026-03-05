@@ -125,6 +125,22 @@ function readUrlState(sp: URLSearchParams): UrlState {
   return { scan, q, sort, compact };
 }
 
+function inputGlass() {
+  return [
+    "rounded-xl border px-3 py-2 text-sm outline-none transition",
+    "border-white/10 bg-white/5 text-white placeholder:text-white/35",
+    "focus:ring-2 focus:ring-white/15",
+  ].join(" ");
+}
+
+function selectGlass() {
+  return [
+    "rounded-xl border px-2 py-2 text-sm outline-none transition",
+    "border-white/10 bg-white/5 text-white",
+    "focus:ring-2 focus:ring-white/15",
+  ].join(" ");
+}
+
 export default function ChapterListClient(props: {
   workSlug: string;
   chapters: ChapterRowClient[];
@@ -196,9 +212,7 @@ export default function ChapterListClient(props: {
         ? props.chapters
         : props.chapters.filter((c) => c.scanlator?.id === scanFilter);
 
-    const byQuery = normalizedQuery
-      ? byScan.filter((c) => matchesQuery(c, normalizedQuery))
-      : byScan;
+    const byQuery = normalizedQuery ? byScan.filter((c) => matchesQuery(c, normalizedQuery)) : byScan;
 
     const sorted = [...byQuery].sort((a, b) => {
       const da = new Date(a.createdAtIso).getTime();
@@ -277,12 +291,7 @@ export default function ChapterListClient(props: {
 
   // ✅ Persistência na URL (debounce na query)
   useEffect(() => {
-    const st: UrlState = {
-      scan: scanFilter,
-      q: query,
-      sort: sortMode,
-      compact,
-    };
+    const st: UrlState = { scan: scanFilter, q: query, sort: sortMode, compact };
 
     const t = setTimeout(() => {
       const nextUrl = buildUrl(pathname, st);
@@ -302,12 +311,7 @@ export default function ChapterListClient(props: {
 
   async function copyCurrentLink() {
     try {
-      const st: UrlState = {
-        scan: scanFilter,
-        q: query,
-        sort: sortMode,
-        compact,
-      };
+      const st: UrlState = { scan: scanFilter, q: query, sort: sortMode, compact };
 
       const relative = buildUrl(pathname, st);
       const origin = window.location.origin;
@@ -328,14 +332,11 @@ export default function ChapterListClient(props: {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs opacity-70">Scan:</label>
-          <select
-            value={scanFilter}
-            onChange={(e) => setScanFilter(e.target.value)}
-            className="rounded-md border bg-white px-2 py-1 text-sm"
-          >
+          <span className="text-xs text-white/50">Scan:</span>
+
+          <select value={scanFilter} onChange={(e) => setScanFilter(e.target.value)} className={selectGlass()}>
             <option value="ALL">Todas</option>
             {scanOptions.map((s) => (
               <option key={s.id} value={s.id}>
@@ -344,11 +345,12 @@ export default function ChapterListClient(props: {
             ))}
           </select>
 
-          <label className="text-xs opacity-70 ml-2">Ordenar:</label>
+          <span className="text-xs text-white/50 ml-2">Ordenar:</span>
+
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as SortMode)}
-            className="rounded-md border bg-white px-2 py-1 text-sm"
+            className={selectGlass()}
           >
             <option value="NUMBER_DESC">Número (desc)</option>
             <option value="NEWEST">Mais recentes</option>
@@ -358,23 +360,14 @@ export default function ChapterListClient(props: {
           <button
             type="button"
             onClick={() => setCompact((v) => !v)}
-            className="rounded-md border bg-white px-2 py-1 text-sm hover:bg-gray-50"
+            className="btn-secondary"
             title="Alternar modo compacto"
           >
             {compact ? "Compacto: ON" : "Compacto: OFF"}
           </button>
 
-          <button
-            type="button"
-            onClick={() => void copyCurrentLink()}
-            className="rounded-md border bg-white px-2 py-1 text-sm hover:bg-gray-50"
-            title="Copiar link com filtros"
-          >
-            {copyStatus === "COPIED"
-              ? "Copiado!"
-              : copyStatus === "ERROR"
-              ? "Falhou :("
-              : "Copiar link"}
+          <button type="button" onClick={() => void copyCurrentLink()} className="btn-secondary" title="Copiar link com filtros">
+            {copyStatus === "COPIED" ? "Copiado!" : copyStatus === "ERROR" ? "Falhou :(" : "Copiar link"}
           </button>
         </div>
 
@@ -383,9 +376,9 @@ export default function ChapterListClient(props: {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder='Buscar: "12", "reaper", "paginado"...'
-            className="w-full sm:w-72 rounded-md border bg-white px-3 py-2 text-sm"
+            className={["w-full sm:w-72", inputGlass()].join(" ")}
           />
-          <div className="text-xs opacity-60 whitespace-nowrap">
+          <div className="text-xs text-white/50 whitespace-nowrap">
             {filtered.length}/{props.chapters.length}
           </div>
         </div>
@@ -393,13 +386,13 @@ export default function ChapterListClient(props: {
 
       {/* Latest */}
       {latest.length > 0 && (
-        <div className="rounded-lg border bg-gray-50 p-3">
+        <div className="card p-4">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">Últimos uploads</div>
-            <div className="text-xs opacity-60">Top {latest.length}</div>
+            <div className="text-xs text-white/50">Top {latest.length}</div>
           </div>
 
-          <div className="mt-2 grid gap-2">
+          <div className="mt-3 grid gap-2">
             {latest.map((c) => {
               const scanName = displayScanName(c.scanlator);
               const d = new Date(c.createdAtIso);
@@ -409,30 +402,28 @@ export default function ChapterListClient(props: {
               return (
                 <div
                   key={c.id}
-                  className={`flex items-center justify-between gap-3 rounded-md border bg-white ${
-                    compact ? "px-2 py-2" : "px-3 py-2"
-                  }`}
+                  className={[
+                    "rounded-2xl border border-white/10 bg-black/20",
+                    "hover:bg-black/30 transition",
+                    compact ? "px-2 py-2" : "px-3 py-2",
+                  ].join(" ")}
                 >
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">{chapterLabel(c)}</div>
-                    <div className="text-xs opacity-70 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border bg-white px-2 py-0.5">{scanName}</span>
-                      <span className="rounded-full border bg-white px-2 py-0.5">
-                        {kindBadge(c.kind, c.readMode)}
-                      </span>
-                      <span className="opacity-60" title={full}>
-                        {rel}
-                      </span>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{chapterLabel(c)}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/60">
+                        <span className="chip">{scanName}</span>
+                        <span className="chip">{kindBadge(c.kind, c.readMode)}</span>
+                        <span className="text-white/45" title={full}>
+                          {rel}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  <Link
-                    className="shrink-0 rounded-md bg-black text-white px-3 py-2 hover:opacity-90"
-                    href={`/read/${c.id}`}
-                    title={`Ler (${scanName})`}
-                  >
-                    Ler
-                  </Link>
+                    <Link className="btn-primary shrink-0" href={`/read/${c.id}`} title={`Ler (${scanName})`}>
+                      Ler
+                    </Link>
+                  </div>
                 </div>
               );
             })}
@@ -449,18 +440,26 @@ export default function ChapterListClient(props: {
             <section key={g.number == null ? "null" : `n:${g.number}`} className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold">{groupTitle}</div>
-                <div className="text-xs opacity-60">{g.items.length} versão(ões)</div>
+                <div className="text-xs text-white/50">{g.items.length} versão(ões)</div>
               </div>
 
-              <div className="overflow-hidden rounded-lg border">
-                <div className={`grid grid-cols-12 gap-2 bg-gray-50 ${listPadding} ${textSize} font-medium`}>
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/10">
+                <div
+                  className={[
+                    "grid grid-cols-12 gap-2",
+                    "bg-black/20 border-b border-white/10",
+                    listPadding,
+                    textSize,
+                    "font-medium text-white/70",
+                  ].join(" ")}
+                >
                   <div className="col-span-5">Scan / Título</div>
                   <div className="col-span-3">Tipo</div>
                   <div className="col-span-2">Data</div>
                   <div className="col-span-2 text-right">Ações</div>
                 </div>
 
-                <ul className="divide-y">
+                <ul className="divide-y divide-white/10">
                   {g.items.map((c) => {
                     const scanName = displayScanName(c.scanlator);
                     const d = new Date(c.createdAtIso);
@@ -469,35 +468,36 @@ export default function ChapterListClient(props: {
                     const kind = kindBadge(c.kind, c.readMode);
 
                     return (
-                      <li key={c.id} className={`grid grid-cols-12 gap-2 ${listPadding}`}>
+                      <li
+                        key={c.id}
+                        className={[
+                          "grid grid-cols-12 gap-2",
+                          listPadding,
+                          "bg-black/0 hover:bg-white/5 transition",
+                        ].join(" ")}
+                      >
                         <div className="col-span-5 min-w-0">
                           <div className="text-sm font-medium truncate">
                             {scanName}
-                            {c.title ? <span className="opacity-70"> • {c.title}</span> : null}
+                            {c.title ? <span className="text-white/60"> • {c.title}</span> : null}
                           </div>
-                          <div className={`${textSize} opacity-60 truncate`}>{chapterLabel(c)}</div>
+                          <div className={[textSize, "text-white/45 truncate"].join(" ")}>
+                            {chapterLabel(c)}
+                          </div>
                         </div>
 
                         <div className="col-span-3 flex items-center">
-                          <span className={`${textSize} rounded-full border bg-white px-2 py-0.5`}>
-                            {kind}
-                          </span>
+                          <span className="chip">{kind}</span>
                         </div>
 
                         <div className="col-span-2 flex items-center">
-                          <span className={`${textSize} opacity-70`} title={full}>
+                          <span className={[textSize, "text-white/55"].join(" ")} title={full}>
                             {rel}
                           </span>
                         </div>
 
                         <div className="col-span-2 flex items-center justify-end gap-2">
-                          <Link
-                            className={`rounded-md bg-black text-white ${
-                              compact ? "px-2 py-1.5 text-sm" : "px-3 py-1.5 text-sm"
-                            } hover:opacity-90`}
-                            href={`/read/${c.id}`}
-                            title={`Ler (${scanName})`}
-                          >
+                          <Link className="btn-primary" href={`/read/${c.id}`} title={`Ler (${scanName})`}>
                             Ler
                           </Link>
 
@@ -514,12 +514,13 @@ export default function ChapterListClient(props: {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-sm opacity-70">Nenhum capítulo encontrado com esses filtros.</div>
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
+          Nenhum capítulo encontrado com esses filtros.
+        </div>
       )}
 
-      <div className="text-xs opacity-60">
-        Dica: para ver tudo novamente, selecione <span className="font-medium">Scan: Todas</span> e
-        limpe a busca.
+      <div className="text-xs text-white/50">
+        Dica: para ver tudo novamente, selecione <span className="font-medium text-white/70">Scan: Todas</span> e limpe a busca.
       </div>
     </div>
   );

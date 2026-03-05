@@ -4,11 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 
 type Tag = { id: string; slug: string; name: string };
 
+function cx(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+
 export default function TagManagerClient({ workId }: { workId: string }) {
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [workTags, setWorkTags] = useState<Tag[]>([]);
   const [selectedTagId, setSelectedTagId] = useState<string>("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function loadAllTags() {
@@ -93,46 +97,81 @@ export default function TagManagerClient({ workId }: { workId: string }) {
     }
   }
 
+  const msgStyle = useMemo(() => {
+    if (!msg) return null;
+    if (msg === "Tag adicionada!") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+    if (msg === "Selecione uma tag.") return "border-white/10 bg-white/5 text-white/80";
+    if (msg.toLowerCase().includes("erro")) return "border-red-500/30 bg-red-500/10 text-red-200";
+    return "border-white/10 bg-white/5 text-white/80";
+  }, [msg]);
+
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm font-semibold">Tags da obra</div>
+      {/* Tags da obra */}
+      <div className="card p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-white/90">Tags da obra</div>
+            <p className="muted mt-1 text-sm">Clique em uma tag para remover.</p>
+          </div>
+
           <button
-            onClick={load}
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+            type="button"
+            onClick={() => void load()}
+            className="btn-secondary"
             disabled={loading}
+            title="Atualizar"
           >
-            Atualizar
+            {loading ? "Atualizando..." : "Atualizar"}
           </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           {workTags.map((t) => (
             <button
               key={t.id}
-              onClick={() => removeTag(t.id)}
-              className="rounded-full border px-3 py-1 text-xs bg-gray-50 hover:bg-gray-100"
+              type="button"
+              onClick={() => void removeTag(t.id)}
+              className={cx(
+                "chip",
+                "hover:opacity-90 active:opacity-80",
+                loading && "opacity-60"
+              )}
               title="Clique para remover"
               disabled={loading}
             >
-              {t.name} ✕
+              {t.name} <span className="opacity-70">✕</span>
             </button>
           ))}
+
           {workTags.length === 0 && !loading ? (
-            <span className="text-sm text-gray-600">Nenhuma tag nesta obra.</span>
+            <span className="muted text-sm">Nenhuma tag nesta obra.</span>
           ) : null}
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white p-4">
-        <div className="text-sm font-semibold">Adicionar tag</div>
+      {/* Adicionar tag */}
+      <div className="card p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-white/90">Adicionar tag</div>
+            <p className="muted mt-1 text-sm">
+              Dica: crie tags em <span className="font-medium text-white/85">/admin/tags</span>.
+            </p>
+          </div>
 
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <span className="chip">{available.length} disponíveis</span>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
           <select
             value={selectedTagId}
             onChange={(e) => setSelectedTagId(e.target.value)}
-            className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-gray-400"
+            className={cx(
+              "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm",
+              "text-white outline-none",
+              "focus:ring-2 focus:ring-white/20"
+            )}
             disabled={loading}
           >
             <option value="">Selecione...</option>
@@ -144,19 +183,18 @@ export default function TagManagerClient({ workId }: { workId: string }) {
           </select>
 
           <button
-            onClick={addTag}
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+            type="button"
+            onClick={() => void addTag()}
+            className={cx("btn-primary", loading && "opacity-70")}
             disabled={loading}
           >
-            Adicionar
+            {loading ? "Aguarde..." : "Adicionar"}
           </button>
         </div>
 
-        <div className="mt-2 text-xs text-gray-600">
-          Dica: crie tags em <b>/admin/tags</b>.
-        </div>
-
-        {msg ? <div className="mt-2 text-xs text-gray-600">{msg}</div> : null}
+        {msg ? (
+          <div className={cx("mt-3 rounded-xl border p-3 text-xs", msgStyle ?? "")}>{msg}</div>
+        ) : null}
       </div>
     </div>
   );

@@ -44,6 +44,30 @@ a {
   @apply border border-white/10 bg-white/5 backdrop-blur;
 }
 
+/* ===== Native form controls (fix dropdown claro no Windows/Chrome) ===== */
+/* O menu do <select> é nativo; isso reduz bastante o "claro" no dropdown. */
+select,
+option,
+optgroup {
+  color: rgb(255 255 255);
+  background-color: rgb(17 17 17); /* próximo do neutral-900 */
+}
+
+/* Ajuda o Chrome/Windows a não “estourar” branco no hover/selecionado */
+select option:checked {
+  background-color: rgb(30 30 30);
+}
+
+select option:hover {
+  background-color: rgb(30 30 30);
+}
+
+/* Inputs/textarea também herdando bem no dark */
+input,
+textarea {
+  color: rgb(255 255 255);
+}
+
 /* ===== Scrollbar ===== */
 
 /* Chrome / Edge / Safari */
