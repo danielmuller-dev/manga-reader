@@ -166,8 +166,6 @@ export default function HomePage() {
   return (
     <main className="min-h-screen">
       <div className="space-y-10">
-
-        {/* HEADER */}
         <header className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
@@ -188,7 +186,7 @@ export default function HomePage() {
           </nav>
         </header>
 
-        {/* FAVORITOS */}
+        {/* Favoritos (só aparece se tiver pelo menos 1) */}
         {hasFavorites ? (
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -207,6 +205,7 @@ export default function HomePage() {
                 <Link key={w.id} href={`/works/${w.slug}`} className="card card-hover p-2">
                   <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     {w.coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
                     ) : (
                       surfaceCoverFallback()
@@ -215,7 +214,7 @@ export default function HomePage() {
 
                   <div className="mt-2 px-1">
                     <div className="text-xs text-white/60">{w.type}</div>
-                    <div className="text-sm font-semibold line-clamp-2">{w.title}</div>
+                    <div className="text-sm font-semibold leading-tight line-clamp-2">{w.title}</div>
                   </div>
                 </Link>
               ))}
@@ -223,7 +222,7 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        {/* HISTÓRICO */}
+        {/* Histórico / Continuar lendo (só aparece se tiver pelo menos 1 progresso) */}
         {hasProgress ? (
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -240,9 +239,7 @@ export default function HomePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {data.progress.map((p) => {
                 const qs =
-                  p.mode === "PAGINATED"
-                    ? `?p=${p.pageIndex ?? 0}`
-                    : `?s=${p.scrollY ?? 0}`;
+                  p.mode === "PAGINATED" ? `?p=${p.pageIndex ?? 0}` : `?s=${p.scrollY ?? 0}`;
 
                 const where =
                   p.mode === "PAGINATED"
@@ -257,10 +254,12 @@ export default function HomePage() {
                     key={`${p.work.slug}-${p.chapterId}`}
                     href={`/read/${p.chapterId}${qs}`}
                     className="card card-hover p-4"
+                    title={updatedRel ? `Atualizado ${updatedRel} atrás` : "Continuar lendo"}
                   >
                     <div className="flex gap-3">
                       <div className="w-16 h-24 overflow-hidden rounded-xl border border-white/10 bg-black/30">
                         {p.work.coverUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={p.work.coverUrl}
                             alt={p.work.title}
@@ -272,11 +271,9 @@ export default function HomePage() {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex justify-between">
-                          <div className="text-xs text-white/60">{p.work.type}</div>
-                          {updatedRel && (
-                            <span className="text-xs text-white/40">{updatedRel}</span>
-                          )}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-xs text-white/60 truncate">{p.work.type}</div>
+                          {updatedRel ? <span className="text-xs text-white/45">{updatedRel}</span> : null}
                         </div>
 
                         <div className="font-semibold truncate">{p.work.title}</div>
@@ -285,7 +282,7 @@ export default function HomePage() {
                           {formatChapterLabel(p.chapter.number, p.chapter.title)}
                         </div>
 
-                        <div className="mt-2 flex gap-2">
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
                           <span className="chip">{where}</span>
                           <span className="chip">Continuar</span>
                         </div>
@@ -298,10 +295,106 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        <footer className="text-xs text-white/50">
-          MVP • Próximo: polir páginas e melhorar experiência de leitura.
-        </footer>
+        {/* Últimas obras */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Últimas obras</h2>
+              <p className="muted text-sm">Novidades recém cadastradas.</p>
+            </div>
 
+            <Link className="btn-ghost" href="/works">
+              Ver todas →
+            </Link>
+          </div>
+
+          {data.latestWorks.length === 0 ? (
+            <div className="card p-5">
+              <p className="text-sm text-white/70">Nenhuma obra cadastrada ainda.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {data.latestWorks.map((w) => (
+                <Link key={w.id} href={`/works/${w.slug}`} className="card card-hover p-2">
+                  <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                    {w.coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
+                    ) : (
+                      surfaceCoverFallback()
+                    )}
+                  </div>
+
+                  <div className="mt-2 px-1">
+                    <div className="text-xs text-white/60">{w.type}</div>
+                    <div className="text-sm font-semibold leading-tight line-clamp-2">{w.title}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Últimos capítulos (feed) */}
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-xl font-semibold">Últimos capítulos</h2>
+            <p className="muted text-sm">Uploads recentes em qualquer obra.</p>
+          </div>
+
+          {data.latestChapters.length === 0 ? (
+            <div className="card p-5">
+              <p className="text-sm text-white/70">Nenhum capítulo cadastrado ainda.</p>
+            </div>
+          ) : (
+            <div className="card p-4">
+              <ul className="space-y-2">
+                {data.latestChapters.map((c) => {
+                  const created = safeDate(c.createdAt);
+                  const rel = created ? formatRelativeFromNow(created) : null;
+
+                  return (
+                    <li
+                      key={c.id}
+                      className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:bg-black/30"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold truncate">{c.work.title}</div>
+                            {rel ? <span className="text-xs text-white/45 shrink-0">{rel}</span> : null}
+                          </div>
+
+                          <div className="text-sm text-white/80 truncate">
+                            {formatChapterLabel(c.number, c.title)}
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="chip">{c.number != null ? `Cap ${c.number}` : "Cap"}</span>
+                            <span className="chip">{kindBadge(c.kind, c.readMode)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Link className="btn-secondary" href={`/works/${c.work.slug}`}>
+                            Obra
+                          </Link>
+                          <Link className="btn-primary" href={`/read/${c.id}`}>
+                            Ler
+                          </Link>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
+
+        <footer className="text-xs text-white/50">
+          MVP • Próximo: polir páginas (Obras / Página da Obra / Reader) e melhorar experiência de leitura.
+        </footer>
       </div>
     </main>
   );
