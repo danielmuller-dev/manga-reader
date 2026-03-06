@@ -22,6 +22,8 @@ type HomeChapter = {
   work: { slug: string; title: string };
 };
 
+type NextChapter = { id: string; number: number | null; title: string | null } | null;
+
 type HomeProgress = {
   mode: "SCROLL" | "PAGINATED";
   pageIndex: number | null;
@@ -29,7 +31,14 @@ type HomeProgress = {
   updatedAt: string;
   chapterId: string;
   work: { slug: string; title: string; coverUrl: string | null; type: string };
-  chapter: { number: number | null; title: string | null };
+  chapter: {
+    number: number | null;
+    title: string | null;
+    kind: string;
+    readMode: string | null;
+    _count: { pages: number };
+  };
+  nextChapter: NextChapter; // ✅ vindo da API
 };
 
 type HomeResponse = {
@@ -57,6 +66,14 @@ function safeDate(value: string | undefined) {
   if (!value) return null;
   const d = new Date(value);
   return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function formatDateBR(d: Date) {
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const dd = pad2(d.getDate());
+  const mm = pad2(d.getMonth() + 1);
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 function formatRelativeFromNow(d: Date): string {
@@ -186,7 +203,7 @@ export default function HomePage() {
           </nav>
         </header>
 
-        {/* Favoritos (só aparece se tiver pelo menos 1) */}
+        {/* Favoritos */}
         {hasFavorites ? (
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -205,7 +222,6 @@ export default function HomePage() {
                 <Link key={w.id} href={`/works/${w.slug}`} className="card card-hover p-2">
                   <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     {w.coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
                     ) : (
                       surfaceCoverFallback()
@@ -222,75 +238,133 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        {/* Histórico / Continuar lendo (só aparece se tiver pelo menos 1 progresso) */}
+        {/* Continue lendo (estilo print) */}
         {hasProgress ? (
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-semibold">Histórico de leitura</h2>
-                <p className="muted text-sm">Continue exatamente de onde você parou.</p>
+                <h2 className="text-xl font-semibold">Continue lendo</h2>
+                <p className="muted text-sm">Retome rápido de onde você parou.</p>
               </div>
 
               <Link className="btn-ghost" href="/history">
-                Ver tudo →
+                Ver histórico →
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {data.progress.map((p) => {
-                const qs =
-                  p.mode === "PAGINATED" ? `?p=${p.pageIndex ?? 0}` : `?s=${p.scrollY ?? 0}`;
+            <div className="overflow-x-auto">
+              <div className="flex gap-3 min-w-max pr-2">
+                {data.progress.map((p) => {
+                  const qs =
+                    p.mode === "PAGINATED"
+                      ? `?p=${p.pageIndex ?? 0}`
+                      : `?s=${p.scrollY ?? 0}`;
 
-                const where =
-                  p.mode === "PAGINATED"
-                    ? `Página ${((p.pageIndex ?? 0) + 1).toString()}`
-                    : `Scroll ${p.scrollY ?? 0}px`;
+                  const updated = safeDate(p.updatedAt);
+                  const updatedBR = updated ? formatDateBR(updated) : null;
+                  const updatedRel = updated ? formatRelativeFromNow(updated) : null;
 
-                const updated = safeDate(p.updatedAt);
-                const updatedRel = updated ? formatRelativeFromNow(updated) : null;
+                  const totalPages = p.chapter._count.pages ?? 0;
+                  const pageIndex = p.pageIndex ?? 0;
 
-                return (
-                  <Link
-                    key={`${p.work.slug}-${p.chapterId}`}
-                    href={`/read/${p.chapterId}${qs}`}
-                    className="card card-hover p-4"
-                    title={updatedRel ? `Atualizado ${updatedRel} atrás` : "Continuar lendo"}
-                  >
-                    <div className="flex gap-3">
-                      <div className="w-16 h-24 overflow-hidden rounded-xl border border-white/10 bg-black/30">
-                        {p.work.coverUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={p.work.coverUrl}
-                            alt={p.work.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          surfaceCoverFallback()
-                        )}
-                      </div>
+                  const isPaginated = p.mode === "PAGINATED" && totalPages > 0;
+                  const currentPageHuman = pageIndex + 1;
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-xs text-white/60 truncate">{p.work.type}</div>
-                          {updatedRel ? <span className="text-xs text-white/45">{updatedRel}</span> : null}
+                  const percent = isPaginated
+                    ? Math.max(0, Math.min(100, Math.round((currentPageHuman / totalPages) * 100)))
+                    : null;
+
+                  const barWidth = percent != null ? `${percent}%` : "0%";
+
+                  const nextLabel = p.nextChapter?.number != null ? `Cap ${p.nextChapter.number}` : "—";
+                  const hasNext = p.nextChapter != null;
+
+                  return (
+                    <Link
+                      key={`${p.work.slug}-${p.chapterId}`}
+                      href={`/read/${p.chapterId}${qs}`}
+                      className={[
+                        "w-[220px] sm:w-[240px] shrink-0",
+                        "rounded-2xl border border-white/10 bg-black/25 hover:bg-black/30 transition",
+                        "overflow-hidden",
+                      ].join(" ")}
+                      title={updatedRel ? `Atualizado ${updatedRel} atrás` : "Continuar lendo"}
+                    >
+                      <div className="relative">
+                        <div className="w-full aspect-[3/4] bg-black/30">
+                          {p.work.coverUrl ? (
+                            <img
+                              src={p.work.coverUrl}
+                              alt={p.work.title}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            surfaceCoverFallback()
+                          )}
                         </div>
 
-                        <div className="font-semibold truncate">{p.work.title}</div>
+                        <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/30 to-transparent">
+                          <div className="text-sm font-semibold leading-tight line-clamp-2">
+                            {p.work.title}
+                          </div>
+                        </div>
+                      </div>
 
-                        <div className="text-sm text-white/80 truncate">
+                      <div className="p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-white/60">{p.work.type}</span>
+                          {updatedBR ? (
+                            <span className="text-xs text-white/45">lido {updatedBR}</span>
+                          ) : null}
+                        </div>
+
+                        <div className="text-sm text-white/90">
+                          <span className="text-emerald-300 font-semibold">Continuar:</span>{" "}
                           {formatChapterLabel(p.chapter.number, p.chapter.title)}
                         </div>
 
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <span className="chip">{where}</span>
-                          <span className="chip">Continuar</span>
+                        <div className="text-sm">
+                          {hasNext ? (
+                            <span className="text-emerald-300 font-semibold">Próximo:</span>
+                          ) : (
+                            <span className="text-white/60 font-semibold">Último:</span>
+                          )}{" "}
+                          <span className={hasNext ? "text-emerald-300" : "text-white/60"}>
+                            {hasNext ? nextLabel : p.chapter.number != null ? `Cap ${p.chapter.number}` : "—"}
+                          </span>
                         </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="chip">{kindBadge(p.chapter.kind, p.chapter.readMode)}</span>
+
+                          {isPaginated ? (
+                            <span className="chip">
+                              {currentPageHuman}/{totalPages}
+                            </span>
+                          ) : (
+                            <span className="chip">
+                              {p.mode === "SCROLL" ? `Scroll ${p.scrollY ?? 0}px` : "—"}
+                            </span>
+                          )}
+
+                          {percent != null ? <span className="chip">{percent}%</span> : null}
+                        </div>
+
+                        {percent != null ? (
+                          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                            <div className="h-full bg-emerald-400/90" style={{ width: barWidth }} />
+                          </div>
+                        ) : (
+                          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                            <div className="h-full bg-emerald-400/40" style={{ width: "35%" }} />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </Link>
-                );
-              })}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           </section>
         ) : null}
@@ -318,7 +392,6 @@ export default function HomePage() {
                 <Link key={w.id} href={`/works/${w.slug}`} className="card card-hover p-2">
                   <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     {w.coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
                     ) : (
                       surfaceCoverFallback()
@@ -335,7 +408,7 @@ export default function HomePage() {
           )}
         </section>
 
-        {/* Últimos capítulos (feed) */}
+        {/* Últimos capítulos */}
         <section className="space-y-3">
           <div>
             <h2 className="text-xl font-semibold">Últimos capítulos</h2>

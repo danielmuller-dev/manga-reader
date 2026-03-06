@@ -17,6 +17,46 @@ type FavoriteRow = {
   };
 };
 
+type NextChapter = { id: string; number: number | null; title: string | null } | null;
+
+async function findNextChapter(args: {
+  workId: string;
+  currentNumber: number | null;
+  scanlatorId: string | null;
+}): Promise<NextChapter> {
+  const { workId, currentNumber, scanlatorId } = args;
+
+  // Sem número → não dá pra calcular próximo por ordem numérica
+  if (currentNumber == null) return null;
+
+  // 1) tenta próximo da mesma scanlator
+  if (scanlatorId) {
+    const nextSameScan = await prisma.chapter.findFirst({
+      where: {
+        workId,
+        scanlatorId,
+        number: { gt: currentNumber },
+      },
+      orderBy: [{ number: "asc" }, { createdAt: "asc" }],
+      select: { id: true, number: true, title: true },
+    });
+
+    if (nextSameScan) return nextSameScan;
+  }
+
+  // 2) fallback: próximo de qualquer scanlator
+  const nextAny = await prisma.chapter.findFirst({
+    where: {
+      workId,
+      number: { gt: currentNumber },
+    },
+    orderBy: [{ number: "asc" }, { createdAt: "asc" }],
+    select: { id: true, number: true, title: true },
+  });
+
+  return nextAny ?? null;
+}
+
 export async function GET(_req: NextRequest) {
   try {
     const userId = await getUserId();
@@ -48,22 +88,56 @@ export async function GET(_req: NextRequest) {
       },
     });
 
-    const progress = userId
+    const progressBase = userId
       ? await prisma.readingProgress.findMany({
           where: { userId },
           orderBy: { updatedAt: "desc" },
-          take: 6,
+          take: 12,
           select: {
             mode: true,
             pageIndex: true,
             scrollY: true,
             updatedAt: true,
             chapterId: true,
-            work: { select: { slug: true, title: true, coverUrl: true, type: true } },
-            chapter: { select: { number: true, title: true } },
+            work: {
+              select: {
+                id: true, // ✅ precisamos pra buscar próximo
+                slug: true,
+                title: true,
+                coverUrl: true,
+                type: true,
+              },
+            },
+            chapter: {
+              select: {
+                id: true,
+                number: true,
+                title: true,
+                kind: true,
+                readMode: true,
+                scanlatorId: true, // ✅ pra tentar “próximo da mesma scan”
+                _count: { select: { pages: true } },
+              },
+            },
           },
         })
       : [];
+
+    // Enriquecer com nextChapter (sem quebrar tipagem)
+    const progress = await Promise.all(
+      progressBase.map(async (p) => {
+        const nextChapter = await findNextChapter({
+          workId: p.work.id,
+          currentNumber: p.chapter.number,
+          scanlatorId: p.chapter.scanlatorId,
+        });
+
+        return {
+          ...p,
+          nextChapter,
+        };
+      })
+    );
 
     const favorites: FavoriteRow[] = userId
       ? await prisma.favorite.findMany({
