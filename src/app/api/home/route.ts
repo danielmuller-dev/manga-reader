@@ -17,50 +17,11 @@ type FavoriteRow = {
   };
 };
 
-type NextChapter = { id: string; number: number | null; title: string | null } | null;
-
-async function findNextChapter(args: {
-  workId: string;
-  currentNumber: number | null;
-  scanlatorId: string | null;
-}): Promise<NextChapter> {
-  const { workId, currentNumber, scanlatorId } = args;
-
-  // Sem número → não dá pra calcular próximo por ordem numérica
-  if (currentNumber == null) return null;
-
-  // 1) tenta próximo da mesma scanlator
-  if (scanlatorId) {
-    const nextSameScan = await prisma.chapter.findFirst({
-      where: {
-        workId,
-        scanlatorId,
-        number: { gt: currentNumber },
-      },
-      orderBy: [{ number: "asc" }, { createdAt: "asc" }],
-      select: { id: true, number: true, title: true },
-    });
-
-    if (nextSameScan) return nextSameScan;
-  }
-
-  // 2) fallback: próximo de qualquer scanlator
-  const nextAny = await prisma.chapter.findFirst({
-    where: {
-      workId,
-      number: { gt: currentNumber },
-    },
-    orderBy: [{ number: "asc" }, { createdAt: "asc" }],
-    select: { id: true, number: true, title: true },
-  });
-
-  return nextAny ?? null;
-}
-
 export async function GET(_req: NextRequest) {
   try {
     const userId = await getUserId();
 
+    // Mantém (caso você use em outro lugar / futuro)
     const latestWorks = await prisma.work.findMany({
       orderBy: { createdAt: "desc" },
       take: 12,
@@ -74,6 +35,7 @@ export async function GET(_req: NextRequest) {
       },
     });
 
+    // Últimos capítulos globais (lista simples)
     const latestChapters = await prisma.chapter.findMany({
       orderBy: { createdAt: "desc" },
       take: 12,
@@ -88,56 +50,93 @@ export async function GET(_req: NextRequest) {
       },
     });
 
-    const progressBase = userId
+    // ✅ NOVO: Últimas atualizações agrupadas por obra
+    // (pega bastante capítulos recentes e agrupa no server)
+    const recentForUpdates = await prisma.chapter.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 80,
+      select: {
+        id: true,
+        number: true,
+        title: true,
+        createdAt: true,
+        workId: true,
+        work: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            type: true,
+            coverUrl: true,
+          },
+        },
+      },
+    });
+
+    const grouped = new Map<
+      string,
+      {
+        work: { id: string; slug: string; title: string; type: string; coverUrl: string | null };
+        chapters: Array<{ id: string; number: number | null; title: string | null; createdAt: string }>;
+      }
+    >();
+
+    for (const ch of recentForUpdates) {
+      const key = ch.workId;
+
+      const existing = grouped.get(key);
+      if (!existing) {
+        grouped.set(key, {
+          work: {
+            id: ch.work.id,
+            slug: ch.work.slug,
+            title: ch.work.title,
+            type: ch.work.type,
+            coverUrl: ch.work.coverUrl,
+          },
+          chapters: [
+            {
+              id: ch.id,
+              number: ch.number,
+              title: ch.title,
+              createdAt: ch.createdAt.toISOString(),
+            },
+          ],
+        });
+      } else {
+        // limita 2 capítulos por obra
+        if (existing.chapters.length < 2) {
+          existing.chapters.push({
+            id: ch.id,
+            number: ch.number,
+            title: ch.title,
+            createdAt: ch.createdAt.toISOString(),
+          });
+        }
+      }
+
+      // limita a quantidade de obras exibidas
+      if (grouped.size >= 12) break;
+    }
+
+    const latestUpdates = Array.from(grouped.values());
+
+    const progress = userId
       ? await prisma.readingProgress.findMany({
           where: { userId },
           orderBy: { updatedAt: "desc" },
-          take: 12,
+          take: 6,
           select: {
             mode: true,
             pageIndex: true,
             scrollY: true,
             updatedAt: true,
             chapterId: true,
-            work: {
-              select: {
-                id: true, // ✅ precisamos pra buscar próximo
-                slug: true,
-                title: true,
-                coverUrl: true,
-                type: true,
-              },
-            },
-            chapter: {
-              select: {
-                id: true,
-                number: true,
-                title: true,
-                kind: true,
-                readMode: true,
-                scanlatorId: true, // ✅ pra tentar “próximo da mesma scan”
-                _count: { select: { pages: true } },
-              },
-            },
+            work: { select: { slug: true, title: true, coverUrl: true, type: true } },
+            chapter: { select: { number: true, title: true } },
           },
         })
       : [];
-
-    // Enriquecer com nextChapter (sem quebrar tipagem)
-    const progress = await Promise.all(
-      progressBase.map(async (p) => {
-        const nextChapter = await findNextChapter({
-          workId: p.work.id,
-          currentNumber: p.chapter.number,
-          scanlatorId: p.chapter.scanlatorId,
-        });
-
-        return {
-          ...p,
-          nextChapter,
-        };
-      })
-    );
 
     const favorites: FavoriteRow[] = userId
       ? await prisma.favorite.findMany({
@@ -153,6 +152,7 @@ export async function GET(_req: NextRequest) {
     return Response.json({
       latestWorks,
       latestChapters,
+      latestUpdates, // ✅ novo payload
       progress,
       favorites: favorites.map((f) => f.work),
     });

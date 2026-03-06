@@ -22,7 +22,10 @@ type HomeChapter = {
   work: { slug: string; title: string };
 };
 
-type NextChapter = { id: string; number: number | null; title: string | null } | null;
+type LatestUpdate = {
+  work: { id: string; slug: string; title: string; type: string; coverUrl: string | null };
+  chapters: { id: string; number: number | null; title: string | null; createdAt: string }[];
+};
 
 type HomeProgress = {
   mode: "SCROLL" | "PAGINATED";
@@ -31,26 +34,21 @@ type HomeProgress = {
   updatedAt: string;
   chapterId: string;
   work: { slug: string; title: string; coverUrl: string | null; type: string };
-  chapter: {
-    number: number | null;
-    title: string | null;
-    kind: string;
-    readMode: string | null;
-    _count: { pages: number };
-  };
-  nextChapter: NextChapter;
+  chapter: { number: number | null; title: string | null };
 };
 
 type HomeResponse = {
-  latestWorks: HomeWork[];
+  latestWorks: HomeWork[]; // ainda vem da API, mas não usamos nessa seção
   latestChapters: HomeChapter[];
+  latestUpdates: LatestUpdate[]; // ✅ novo
   progress: HomeProgress[];
   favorites: HomeWork[];
   error?: string;
 };
 
-function formatChapterLabel(n: number | null) {
-  return n != null ? `Cap ${n}` : "Cap";
+function formatChapterLabel(n: number | null, t: string | null) {
+  const base = n != null ? `Capítulo ${n}` : "Capítulo";
+  return t ? `${base} — ${t}` : base;
 }
 
 function surfaceCoverFallback() {
@@ -67,28 +65,29 @@ function safeDate(value: string | undefined) {
   return Number.isFinite(d.getTime()) ? d : null;
 }
 
-function formatRelativeFromNow(d: Date): string {
+// ✅ "há 1 minuto", "há 38 minutos", "há 14 dias"
+function formatRelativePTBR(d: Date): string {
   const now = Date.now();
   const diffMs = now - d.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
 
-  if (diffSec < 10) return "agora";
-  if (diffSec < 60) return `${diffSec}s`;
+  if (diffSec < 5) return "há instantes";
+  if (diffSec < 60) return `há ${diffSec} segundo${diffSec === 1 ? "" : "s"}`;
 
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}min`;
+  if (diffMin < 60) return `há ${diffMin} minuto${diffMin === 1 ? "" : "s"}`;
 
   const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH}h`;
+  if (diffH < 24) return `há ${diffH} hora${diffH === 1 ? "" : "s"}`;
 
   const diffD = Math.floor(diffH / 24);
-  if (diffD < 30) return `${diffD}d`;
+  if (diffD < 30) return `há ${diffD} dia${diffD === 1 ? "" : "s"}`;
 
   const diffM = Math.floor(diffD / 30);
-  if (diffM < 12) return `${diffM}m`;
+  if (diffM < 12) return `há ${diffM} mês${diffM === 1 ? "" : "es"}`;
 
   const diffY = Math.floor(diffM / 12);
-  return `${diffY}a`;
+  return `há ${diffY} ano${diffY === 1 ? "" : "s"}`;
 }
 
 export default function HomePage() {
@@ -224,7 +223,7 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        {/* Continue lendo (clean) */}
+        {/* Continue lendo (se já tiver) */}
         {hasProgress ? (
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -247,33 +246,14 @@ export default function HomePage() {
                       : `?s=${p.scrollY ?? 0}`;
 
                   const updated = safeDate(p.updatedAt);
-                  const updatedRel = updated ? formatRelativeFromNow(updated) : null;
-
-                  const totalPages = p.chapter._count.pages ?? 0;
-                  const pageIndex = p.pageIndex ?? 0;
-                  const isPaginated = p.mode === "PAGINATED" && totalPages > 0;
-
-                  const currentPageHuman = pageIndex + 1;
-
-                  const percent = isPaginated
-                    ? Math.max(0, Math.min(100, Math.round((currentPageHuman / totalPages) * 100)))
-                    : null;
-
-                  const barWidth =
-                    percent != null ? `${percent}%` : p.mode === "SCROLL" ? "35%" : "20%";
-
-                  const hasNext = p.nextChapter != null;
-
-                  const label = hasNext
-                    ? `Próximo: ${formatChapterLabel(p.nextChapter?.number ?? null)}`
-                    : `Último: ${formatChapterLabel(p.chapter.number)}`;
+                  const updatedRel = updated ? formatRelativePTBR(updated) : null;
 
                   return (
                     <Link
                       key={`${p.work.slug}-${p.chapterId}`}
                       href={`/read/${p.chapterId}${qs}`}
                       className="card card-hover p-2 w-[150px] sm:w-[160px] lg:w-[170px] shrink-0"
-                      title={updatedRel ? `Atualizado ${updatedRel} atrás` : "Continuar lendo"}
+                      title={updatedRel ? `Atualizado ${updatedRel}` : "Continuar lendo"}
                     >
                       <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
                         {p.work.coverUrl ? (
@@ -295,18 +275,16 @@ export default function HomePage() {
                           {p.work.title}
                         </div>
 
-                        <div className="mt-1 text-[12px] font-semibold truncate">
-                          <span className={hasNext ? "text-emerald-300" : "text-white/60"}>
-                            {label}
-                          </span>
+                        <div className="mt-1 text-[12px] font-semibold truncate text-emerald-300">
+                          {formatChapterLabel(p.chapter.number, p.chapter.title)}
                         </div>
 
                         <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                          <div className="h-full bg-emerald-400/90" style={{ width: barWidth }} />
+                          <div className="h-full bg-emerald-400/90" style={{ width: "35%" }} />
                         </div>
 
                         {updatedRel ? (
-                          <div className="mt-2 text-[11px] text-white/40 truncate">lido {updatedRel} atrás</div>
+                          <div className="mt-2 text-[11px] text-white/40 truncate">{updatedRel}</div>
                         ) : null}
                       </div>
                     </Link>
@@ -317,47 +295,103 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        {/* Últimas obras */}
+        {/* ✅ Últimas atualizações (NOVA SEÇÃO) */}
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold">Últimas obras</h2>
-              <p className="muted text-sm">Novidades recém cadastradas.</p>
+              <h2 className="text-xl font-semibold">Últimas atualizações</h2>
+              <p className="muted text-sm">Capítulos recém-postados em cada obra.</p>
             </div>
 
             <Link className="btn-ghost" href="/works">
-              Ver todas →
+              Ver obras →
             </Link>
           </div>
 
-          {data.latestWorks.length === 0 ? (
+          {data.latestUpdates.length === 0 ? (
             <div className="card p-5">
-              <p className="text-sm text-white/70">Nenhuma obra cadastrada ainda.</p>
+              <p className="text-sm text-white/70">Nenhuma atualização ainda.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {data.latestWorks.map((w) => (
-                <Link key={w.id} href={`/works/${w.slug}`} className="card card-hover p-2">
-                  <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
-                    {w.coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
-                    ) : (
-                      surfaceCoverFallback()
-                    )}
-                  </div>
+            <div className="overflow-x-auto">
+              <div className="flex gap-3 min-w-max pr-2">
+                {data.latestUpdates.map((u) => {
+                  return (
+                    <div
+                      key={u.work.id}
+                      className="rounded-2xl border border-white/10 bg-black/20 shadow-[0_10px_30px_rgba(0,0,0,0.35)] overflow-hidden w-[360px] shrink-0"
+                    >
+                      <div className="flex gap-3 p-3">
+                        <Link
+                          href={`/works/${u.work.slug}`}
+                          className="w-20 h-28 overflow-hidden rounded-xl border border-white/10 bg-black/30 shrink-0"
+                          title={u.work.title}
+                        >
+                          {u.work.coverUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={u.work.coverUrl}
+                              alt={u.work.title}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            surfaceCoverFallback()
+                          )}
+                        </Link>
 
-                  <div className="mt-2 px-1">
-                    <div className="text-xs text-white/60">{w.type}</div>
-                    <div className="text-sm font-semibold leading-tight line-clamp-2">{w.title}</div>
-                  </div>
-                </Link>
-              ))}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold leading-tight line-clamp-2">
+                                {u.work.title}
+                              </div>
+                              <div className="text-xs text-white/50 mt-1">{u.work.type}</div>
+                            </div>
+
+                            <Link className="btn-ghost shrink-0" href={`/works/${u.work.slug}`}>
+                              Abrir →
+                            </Link>
+                          </div>
+
+                          <div className="mt-3 space-y-2">
+                            {u.chapters.slice(0, 2).map((c) => {
+                              const d = safeDate(c.createdAt);
+                              const rel = d ? formatRelativePTBR(d) : null;
+
+                              return (
+                                <Link
+                                  key={c.id}
+                                  href={`/read/${c.id}`}
+                                  className="block rounded-xl border border-white/10 bg-white/5 px-3 py-2 hover:bg-white/10 transition"
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="text-sm font-semibold text-white/90 truncate">
+                                      {formatChapterLabel(c.number, c.title)}
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-1 text-xs text-white/50">
+                                    <span className="inline-flex items-center gap-2">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
+                                      {rel ?? "recentemente"}
+                                    </span>
+                                  </div>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </section>
 
-        {/* Últimos capítulos */}
+        {/* Últimos capítulos (lista simples, mantém) */}
         <section className="space-y-3">
           <div>
             <h2 className="text-xl font-semibold">Últimos capítulos</h2>
@@ -380,7 +414,7 @@ export default function HomePage() {
                       <div className="min-w-0">
                         <div className="font-semibold truncate">{c.work.title}</div>
                         <div className="text-sm text-white/80 truncate">
-                          {formatChapterLabel(c.number)} {c.title ? `— ${c.title}` : ""}
+                          {formatChapterLabel(c.number, c.title)}
                         </div>
 
                         <div className="mt-2 flex flex-wrap items-center gap-2">
