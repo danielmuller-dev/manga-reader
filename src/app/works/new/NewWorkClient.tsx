@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -21,10 +21,13 @@ function slugify(input: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+
   return s;
 }
 
-type CreateWorkResponse = { work?: { id: string; slug: string } } | { error?: string };
+type CreateWorkResponse =
+  | { work?: { id: string; slug: string } }
+  | { error?: string };
 
 function surfaceCoverFallback() {
   return (
@@ -64,21 +67,66 @@ function selectGlass() {
 export default function NewWorkClient() {
   const router = useRouter();
 
-  const [title, setTitle] = useState<string>("");
-  const [slug, setSlug] = useState<string>("");
+  const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
   const [type, setType] = useState<WorkType>("MANGA");
-  const [description, setDescription] = useState<string>("");
-  const [coverUrl, setCoverUrl] = useState<string>("");
+  const [description, setDescription] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
+  const [coverFileName, setCoverFileName] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
-  const [saving, setSaving] = useState<boolean>(false);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  // auto slug: só preenche automaticamente se o usuário ainda não digitou um slug
   useEffect(() => {
     const auto = slugify(title);
     setSlug((prev) => (prev.trim().length ? prev : auto));
   }, [title]);
 
   const previewSlug = useMemo(() => slugify(slug || title), [slug, title]);
+
+  async function handleCoverUpload(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+
+    setUploading(true);
+    setMsg(null);
+    setCoverFileName(file.name);
+
+    try {
+      const res = await fetch("/api/upload/cover", {
+        method: "POST",
+        body: form,
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+
+      if (!res.ok) {
+        setMsg(data.error || "Erro no upload da capa.");
+        return;
+      }
+
+      setCoverUrl(data.url || "");
+    } catch {
+      setMsg("Falha no upload da capa.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function onSelectCover(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    void handleCoverUpload(file);
+
+    // permite selecionar o mesmo arquivo novamente depois
+    e.target.value = "";
+  }
+
+  function removeCover() {
+    setCoverUrl("");
+    setCoverFileName("");
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -98,16 +146,19 @@ export default function NewWorkClient() {
     }
 
     setSaving(true);
+
     try {
       const res = await fetch("/api/works", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           title: cleanTitle,
           slug: cleanSlug,
           type,
-          description: description.trim().length ? description.trim() : null,
-          coverUrl: coverUrl.trim().length ? coverUrl.trim() : null,
+          description: description.trim() || null,
+          coverUrl: coverUrl || null,
         }),
       });
 
@@ -131,74 +182,66 @@ export default function NewWorkClient() {
   return (
     <div className="p-6">
       <div className="max-w-5xl mx-auto space-y-6">
-        {/* Header */}
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-3xl font-semibold tracking-tight text-white">Nova obra</h1>
-            <p className="mt-2 text-sm text-white/70">
-              Cadastre uma obra com título, tipo, descrição e capa.
+          <div>
+            <h1 className="text-3xl font-semibold text-white">Nova obra</h1>
+            <p className="text-sm text-white/70 mt-1">
+              Cadastre uma obra com título, tipo e capa.
             </p>
           </div>
 
-          <Link className="btn-secondary shrink-0" href="/works">
+          <Link className="btn-secondary" href="/works">
             ← Voltar
           </Link>
         </div>
 
-        {/* Form */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Form card */}
           <form onSubmit={onSubmit} className="card p-5 space-y-4 lg:col-span-7">
-            {/* Alert */}
             {msg ? (
-              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
                 {msg}
               </div>
             ) : (
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70">
                 Dica: o <span className="font-medium text-white/85">slug</span> vira a URL da obra.
               </div>
             )}
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white/85">Título</label>
+              <label className="text-sm text-white/80">Título</label>
               <input
                 className={inputGlass()}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex: Martial Peak"
-                required
-                disabled={saving}
+                disabled={saving || uploading}
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white/85">Slug</label>
+              <label className="text-sm text-white/80">Slug</label>
               <input
                 className={inputGlass()}
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                placeholder="ex: martial-peak"
-                required
-                disabled={saving}
+                placeholder="martial-peak"
+                disabled={saving || uploading}
               />
-
-              <div className="text-xs text-white/55">
-                URL ficará:{" "}
-                <span className="font-mono text-white/75">/works/{previewSlug || "..."}</span>
+              <div className="text-xs text-white/50">
+                URL: /works/{previewSlug || "..."}
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white/85">Tipo</label>
+              <label className="text-sm text-white/80">Tipo</label>
               <select
                 className={selectGlass()}
                 value={type}
+                disabled={saving || uploading}
                 onChange={(e) => {
                   const v = e.target.value;
                   if (isWorkType(v)) setType(v);
                 }}
-                disabled={saving}
               >
                 {TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -209,54 +252,88 @@ export default function NewWorkClient() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white/85">Descrição</label>
+              <label className="text-sm text-white/80">Descrição</label>
               <textarea
-                className={textareaGlass()}
                 rows={5}
+                className={textareaGlass()}
                 value={description}
+                disabled={saving || uploading}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descrição da obra..."
-                disabled={saving}
               />
-              <div className="text-xs text-white/45">
-                Opcional, mas ajuda muito no SEO e na página da obra.
-              </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white/85">Capa (URL)</label>
+              <label className="text-sm text-white/80">Capa</label>
+
               <input
-                className={inputGlass()}
-                value={coverUrl}
-                onChange={(e) => setCoverUrl(e.target.value)}
-                placeholder="https://..."
-                disabled={saving}
+                id="cover-upload"
+                type="file"
+                accept="image/*"
+                disabled={uploading || saving}
+                onChange={onSelectCover}
+                className="hidden"
               />
-              <div className="text-xs text-white/45">
-                Se você ainda não tiver upload aqui, pode colar uma URL por enquanto.
+
+              <label
+                htmlFor="cover-upload"
+                className={[
+                  "flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 transition",
+                  "border-white/10 bg-white/5 hover:bg-white/10",
+                  uploading || saving ? "opacity-60 cursor-not-allowed" : "",
+                ].join(" ")}
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-white">
+                    {uploading ? "Enviando capa..." : "Escolher imagem da capa"}
+                  </div>
+                  <div className="text-xs text-white/50 truncate">
+                    {coverFileName
+                      ? coverFileName
+                      : "PNG, JPG ou WEBP • clique para selecionar"}
+                  </div>
+                </div>
+
+                <div className="shrink-0 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-xs text-white/80">
+                  {uploading ? "Upload..." : "Selecionar"}
+                </div>
+              </label>
+
+              <div className="flex items-center justify-between gap-3 text-xs text-white/45">
+                <span>A capa será enviada automaticamente para o storage do projeto.</span>
+
+                {coverUrl ? (
+                  <button
+                    type="button"
+                    onClick={removeCover}
+                    className="text-red-300 hover:text-red-200 transition"
+                    disabled={uploading || saving}
+                  >
+                    Remover capa
+                  </button>
+                ) : null}
               </div>
             </div>
 
-            <button className="btn-primary w-full" type="submit" disabled={saving}>
-              {saving ? "Criando..." : "Criar obra"}
+            <button className="btn-primary w-full" disabled={saving || uploading}>
+              {saving ? "Criando..." : uploading ? "Aguardando upload..." : "Criar obra"}
             </button>
           </form>
 
-          {/* Preview card */}
           <div className="lg:col-span-5 space-y-4">
             <div className="card p-5">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-white/90">Preview</div>
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-white/70">Preview</div>
                 <span className="chip">{type}</span>
               </div>
 
-              <div className="mt-4 flex gap-4">
-                <div className="w-28 h-40 overflow-hidden rounded-2xl border border-white/10 bg-black/30 shrink-0">
-                  {coverUrl.trim() ? (
+              <div className="flex gap-4 mt-4">
+                <div className="w-28 h-40 rounded-xl border border-white/10 overflow-hidden bg-black/30">
+                  {coverUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={coverUrl.trim()}
-                      alt={title || "Capa"}
+                      src={coverUrl}
+                      alt="Capa"
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -264,18 +341,19 @@ export default function NewWorkClient() {
                   )}
                 </div>
 
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs text-white/60 truncate">{type}</div>
-                  <div className="mt-1 text-lg font-semibold text-white leading-tight line-clamp-2">
-                    {title.trim() ? title.trim() : "Título da obra"}
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-white/50">{type}</div>
+
+                  <div className="text-lg font-semibold text-white line-clamp-2">
+                    {title || "Título da obra"}
                   </div>
 
-                  <div className="mt-2 text-xs text-white/50">
-                    /works/<span className="font-mono text-white/70">{previewSlug || "slug-da-obra"}</span>
+                  <div className="text-xs text-white/40 mt-1">
+                    /works/{previewSlug || "..."}
                   </div>
 
-                  <div className="mt-3 text-sm text-white/70 line-clamp-5 whitespace-pre-wrap">
-                    {description.trim() ? description.trim() : "A descrição vai aparecer aqui."}
+                  <div className="text-sm text-white/70 mt-3 line-clamp-5 whitespace-pre-wrap">
+                    {description || "Descrição aparecerá aqui."}
                   </div>
                 </div>
               </div>
@@ -284,9 +362,9 @@ export default function NewWorkClient() {
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
               <div className="font-medium text-white/85">Boas práticas</div>
               <ul className="mt-2 list-disc pl-5 space-y-1 text-white/70">
-                <li>Use título limpo (sem “Cap. 1”, sem extras).</li>
-                <li>Slug curto e sem acentos.</li>
-                <li>Descrição curta e objetiva.</li>
+                <li>Use título limpo, sem extras de capítulo.</li>
+                <li>Prefira slug curto e sem acentos.</li>
+                <li>Use uma capa vertical em boa qualidade.</li>
               </ul>
             </div>
           </div>
