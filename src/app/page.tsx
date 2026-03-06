@@ -38,7 +38,7 @@ type HomeProgress = {
     readMode: string | null;
     _count: { pages: number };
   };
-  nextChapter: NextChapter; // ✅ vindo da API
+  nextChapter: NextChapter;
 };
 
 type HomeResponse = {
@@ -49,9 +49,8 @@ type HomeResponse = {
   error?: string;
 };
 
-function formatChapterLabel(n: number | null, t: string | null) {
-  const base = n != null ? `Cap. ${n}` : "Capítulo";
-  return t ? `${base} — ${t}` : base;
+function formatChapterLabel(n: number | null) {
+  return n != null ? `Cap ${n}` : "Cap";
 }
 
 function surfaceCoverFallback() {
@@ -66,14 +65,6 @@ function safeDate(value: string | undefined) {
   if (!value) return null;
   const d = new Date(value);
   return Number.isFinite(d.getTime()) ? d : null;
-}
-
-function formatDateBR(d: Date) {
-  const pad2 = (n: number) => String(n).padStart(2, "0");
-  const dd = pad2(d.getDate());
-  const mm = pad2(d.getMonth() + 1);
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
 }
 
 function formatRelativeFromNow(d: Date): string {
@@ -98,12 +89,6 @@ function formatRelativeFromNow(d: Date): string {
 
   const diffY = Math.floor(diffM / 12);
   return `${diffY}a`;
-}
-
-function kindBadge(kind: string, readMode: string | null) {
-  if (kind === "TEXT") return "TEXT";
-  if (kind === "IMAGES" && readMode) return `IMAGES • ${readMode}`;
-  return kind;
 }
 
 export default function HomePage() {
@@ -222,6 +207,7 @@ export default function HomePage() {
                 <Link key={w.id} href={`/works/${w.slug}`} className="card card-hover p-2">
                   <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     {w.coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
                     ) : (
                       surfaceCoverFallback()
@@ -238,7 +224,7 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        {/* Continue lendo (estilo print) */}
+        {/* Continue lendo (clean) */}
         {hasProgress ? (
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -261,105 +247,67 @@ export default function HomePage() {
                       : `?s=${p.scrollY ?? 0}`;
 
                   const updated = safeDate(p.updatedAt);
-                  const updatedBR = updated ? formatDateBR(updated) : null;
                   const updatedRel = updated ? formatRelativeFromNow(updated) : null;
 
                   const totalPages = p.chapter._count.pages ?? 0;
                   const pageIndex = p.pageIndex ?? 0;
-
                   const isPaginated = p.mode === "PAGINATED" && totalPages > 0;
+
                   const currentPageHuman = pageIndex + 1;
 
                   const percent = isPaginated
                     ? Math.max(0, Math.min(100, Math.round((currentPageHuman / totalPages) * 100)))
                     : null;
 
-                  const barWidth = percent != null ? `${percent}%` : "0%";
+                  const barWidth =
+                    percent != null ? `${percent}%` : p.mode === "SCROLL" ? "35%" : "20%";
 
-                  const nextLabel = p.nextChapter?.number != null ? `Cap ${p.nextChapter.number}` : "—";
                   const hasNext = p.nextChapter != null;
+
+                  const label = hasNext
+                    ? `Próximo: ${formatChapterLabel(p.nextChapter?.number ?? null)}`
+                    : `Último: ${formatChapterLabel(p.chapter.number)}`;
 
                   return (
                     <Link
                       key={`${p.work.slug}-${p.chapterId}`}
                       href={`/read/${p.chapterId}${qs}`}
-                      className={[
-                        "w-[220px] sm:w-[240px] shrink-0",
-                        "rounded-2xl border border-white/10 bg-black/25 hover:bg-black/30 transition",
-                        "overflow-hidden",
-                      ].join(" ")}
+                      className="card card-hover p-2 w-[150px] sm:w-[160px] lg:w-[170px] shrink-0"
                       title={updatedRel ? `Atualizado ${updatedRel} atrás` : "Continuar lendo"}
                     >
-                      <div className="relative">
-                        <div className="w-full aspect-[3/4] bg-black/30">
-                          {p.work.coverUrl ? (
-                            <img
-                              src={p.work.coverUrl}
-                              alt={p.work.title}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            surfaceCoverFallback()
-                          )}
-                        </div>
-
-                        <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/30 to-transparent">
-                          <div className="text-sm font-semibold leading-tight line-clamp-2">
-                            {p.work.title}
-                          </div>
-                        </div>
+                      <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                        {p.work.coverUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={p.work.coverUrl}
+                            alt={p.work.title}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          surfaceCoverFallback()
+                        )}
                       </div>
 
-                      <div className="p-3 space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-white/60">{p.work.type}</span>
-                          {updatedBR ? (
-                            <span className="text-xs text-white/45">lido {updatedBR}</span>
-                          ) : null}
+                      <div className="mt-2 px-1">
+                        <div className="text-xs text-white/60 truncate">{p.work.type}</div>
+                        <div className="text-sm font-semibold leading-tight line-clamp-2">
+                          {p.work.title}
                         </div>
 
-                        <div className="text-sm text-white/90">
-                          <span className="text-emerald-300 font-semibold">Continuar:</span>{" "}
-                          {formatChapterLabel(p.chapter.number, p.chapter.title)}
-                        </div>
-
-                        <div className="text-sm">
-                          {hasNext ? (
-                            <span className="text-emerald-300 font-semibold">Próximo:</span>
-                          ) : (
-                            <span className="text-white/60 font-semibold">Último:</span>
-                          )}{" "}
+                        <div className="mt-1 text-[12px] font-semibold truncate">
                           <span className={hasNext ? "text-emerald-300" : "text-white/60"}>
-                            {hasNext ? nextLabel : p.chapter.number != null ? `Cap ${p.chapter.number}` : "—"}
+                            {label}
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="chip">{kindBadge(p.chapter.kind, p.chapter.readMode)}</span>
-
-                          {isPaginated ? (
-                            <span className="chip">
-                              {currentPageHuman}/{totalPages}
-                            </span>
-                          ) : (
-                            <span className="chip">
-                              {p.mode === "SCROLL" ? `Scroll ${p.scrollY ?? 0}px` : "—"}
-                            </span>
-                          )}
-
-                          {percent != null ? <span className="chip">{percent}%</span> : null}
+                        <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                          <div className="h-full bg-emerald-400/90" style={{ width: barWidth }} />
                         </div>
 
-                        {percent != null ? (
-                          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                            <div className="h-full bg-emerald-400/90" style={{ width: barWidth }} />
-                          </div>
-                        ) : (
-                          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                            <div className="h-full bg-emerald-400/40" style={{ width: "35%" }} />
-                          </div>
-                        )}
+                        {updatedRel ? (
+                          <div className="mt-2 text-[11px] text-white/40 truncate">lido {updatedRel} atrás</div>
+                        ) : null}
                       </div>
                     </Link>
                   );
@@ -392,6 +340,7 @@ export default function HomePage() {
                 <Link key={w.id} href={`/works/${w.slug}`} className="card card-hover p-2">
                   <div className="w-full aspect-[3/4] overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     {w.coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={w.coverUrl} alt={w.title} className="w-full h-full object-cover" />
                     ) : (
                       surfaceCoverFallback()
@@ -422,44 +371,37 @@ export default function HomePage() {
           ) : (
             <div className="card p-4">
               <ul className="space-y-2">
-                {data.latestChapters.map((c) => {
-                  const created = safeDate(c.createdAt);
-                  const rel = created ? formatRelativeFromNow(created) : null;
-
-                  return (
-                    <li
-                      key={c.id}
-                      className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:bg-black/30"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="font-semibold truncate">{c.work.title}</div>
-                            {rel ? <span className="text-xs text-white/45 shrink-0">{rel}</span> : null}
-                          </div>
-
-                          <div className="text-sm text-white/80 truncate">
-                            {formatChapterLabel(c.number, c.title)}
-                          </div>
-
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <span className="chip">{c.number != null ? `Cap ${c.number}` : "Cap"}</span>
-                            <span className="chip">{kindBadge(c.kind, c.readMode)}</span>
-                          </div>
+                {data.latestChapters.map((c) => (
+                  <li
+                    key={c.id}
+                    className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:bg-black/30"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold truncate">{c.work.title}</div>
+                        <div className="text-sm text-white/80 truncate">
+                          {formatChapterLabel(c.number)} {c.title ? `— ${c.title}` : ""}
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Link className="btn-secondary" href={`/works/${c.work.slug}`}>
-                            Obra
-                          </Link>
-                          <Link className="btn-primary" href={`/read/${c.id}`}>
-                            Ler
-                          </Link>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="chip">
+                            {c.kind}
+                            {c.kind === "IMAGES" && c.readMode ? ` • ${c.readMode}` : ""}
+                          </span>
                         </div>
                       </div>
-                    </li>
-                  );
-                })}
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Link className="btn-secondary" href={`/works/${c.work.slug}`}>
+                          Obra
+                        </Link>
+                        <Link className="btn-primary" href={`/read/${c.id}`}>
+                          Ler
+                        </Link>
+                      </div>
+                    </div>
+                  </li>
+                ))}
               </ul>
             </div>
           )}

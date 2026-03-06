@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -26,6 +26,41 @@ function slugify(input: string): string {
 
 type CreateWorkResponse = { work?: { id: string; slug: string } } | { error?: string };
 
+function surfaceCoverFallback() {
+  return (
+    <div className="w-full h-full flex items-center justify-center text-xs text-white/50">
+      Sem capa
+    </div>
+  );
+}
+
+function inputGlass() {
+  return [
+    "w-full rounded-xl border px-3 py-2 text-sm outline-none transition",
+    "border-white/10 bg-white/5 text-white placeholder:text-white/35",
+    "focus:ring-2 focus:ring-white/15",
+    "disabled:opacity-60 disabled:cursor-not-allowed",
+  ].join(" ");
+}
+
+function textareaGlass() {
+  return [
+    "w-full rounded-xl border px-3 py-2 text-sm outline-none transition",
+    "border-white/10 bg-white/5 text-white placeholder:text-white/35",
+    "focus:ring-2 focus:ring-white/15",
+    "disabled:opacity-60 disabled:cursor-not-allowed",
+  ].join(" ");
+}
+
+function selectGlass() {
+  return [
+    "w-full rounded-xl border px-3 py-2 text-sm outline-none transition",
+    "border-white/10 bg-white/5 text-white",
+    "focus:ring-2 focus:ring-white/15",
+    "disabled:opacity-60 disabled:cursor-not-allowed",
+  ].join(" ");
+}
+
 export default function NewWorkClient() {
   const router = useRouter();
 
@@ -42,6 +77,8 @@ export default function NewWorkClient() {
     const auto = slugify(title);
     setSlug((prev) => (prev.trim().length ? prev : auto));
   }, [title]);
+
+  const previewSlug = useMemo(() => slugify(slug || title), [slug, title]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -92,96 +129,169 @@ export default function NewWorkClient() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-      <div className="max-w-lg mx-auto space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Nova obra</h1>
-          <Link className="underline" href="/works">
-            Voltar
+    <div className="p-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-semibold tracking-tight text-white">Nova obra</h1>
+            <p className="mt-2 text-sm text-white/70">
+              Cadastre uma obra com título, tipo, descrição e capa.
+            </p>
+          </div>
+
+          <Link className="btn-secondary shrink-0" href="/works">
+            ← Voltar
           </Link>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
-          <div>
-            <label className="text-sm font-medium">Título</label>
-            <input
-              className="w-full border rounded-md p-2"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Martial Peak"
-              required
-              disabled={saving}
-            />
-          </div>
+        {/* Form */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Form card */}
+          <form onSubmit={onSubmit} className="card p-5 space-y-4 lg:col-span-7">
+            {/* Alert */}
+            {msg ? (
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {msg}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+                Dica: o <span className="font-medium text-white/85">slug</span> vira a URL da obra.
+              </div>
+            )}
 
-          <div>
-            <label className="text-sm font-medium">Slug</label>
-            <input
-              className="w-full border rounded-md p-2"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="ex: martial-peak"
-              required
-              disabled={saving}
-            />
-            <div className="mt-1 text-xs text-gray-500">
-              URL ficará: <span className="font-mono">/works/{slugify(slug || title)}</span>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white/85">Título</label>
+              <input
+                className={inputGlass()}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Ex: Martial Peak"
+                required
+                disabled={saving}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white/85">Slug</label>
+              <input
+                className={inputGlass()}
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="ex: martial-peak"
+                required
+                disabled={saving}
+              />
+
+              <div className="text-xs text-white/55">
+                URL ficará:{" "}
+                <span className="font-mono text-white/75">/works/{previewSlug || "..."}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white/85">Tipo</label>
+              <select
+                className={selectGlass()}
+                value={type}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (isWorkType(v)) setType(v);
+                }}
+                disabled={saving}
+              >
+                {TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white/85">Descrição</label>
+              <textarea
+                className={textareaGlass()}
+                rows={5}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Descrição da obra..."
+                disabled={saving}
+              />
+              <div className="text-xs text-white/45">
+                Opcional, mas ajuda muito no SEO e na página da obra.
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white/85">Capa (URL)</label>
+              <input
+                className={inputGlass()}
+                value={coverUrl}
+                onChange={(e) => setCoverUrl(e.target.value)}
+                placeholder="https://..."
+                disabled={saving}
+              />
+              <div className="text-xs text-white/45">
+                Se você ainda não tiver upload aqui, pode colar uma URL por enquanto.
+              </div>
+            </div>
+
+            <button className="btn-primary w-full" type="submit" disabled={saving}>
+              {saving ? "Criando..." : "Criar obra"}
+            </button>
+          </form>
+
+          {/* Preview card */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="card p-5">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-white/90">Preview</div>
+                <span className="chip">{type}</span>
+              </div>
+
+              <div className="mt-4 flex gap-4">
+                <div className="w-28 h-40 overflow-hidden rounded-2xl border border-white/10 bg-black/30 shrink-0">
+                  {coverUrl.trim() ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={coverUrl.trim()}
+                      alt={title || "Capa"}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    surfaceCoverFallback()
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-white/60 truncate">{type}</div>
+                  <div className="mt-1 text-lg font-semibold text-white leading-tight line-clamp-2">
+                    {title.trim() ? title.trim() : "Título da obra"}
+                  </div>
+
+                  <div className="mt-2 text-xs text-white/50">
+                    /works/<span className="font-mono text-white/70">{previewSlug || "slug-da-obra"}</span>
+                  </div>
+
+                  <div className="mt-3 text-sm text-white/70 line-clamp-5 whitespace-pre-wrap">
+                    {description.trim() ? description.trim() : "A descrição vai aparecer aqui."}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+              <div className="font-medium text-white/85">Boas práticas</div>
+              <ul className="mt-2 list-disc pl-5 space-y-1 text-white/70">
+                <li>Use título limpo (sem “Cap. 1”, sem extras).</li>
+                <li>Slug curto e sem acentos.</li>
+                <li>Descrição curta e objetiva.</li>
+              </ul>
             </div>
           </div>
-
-          <div>
-            <label className="text-sm font-medium">Tipo</label>
-            <select
-              className="w-full border rounded-md p-2"
-              value={type}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (isWorkType(v)) setType(v);
-              }}
-              disabled={saving}
-            >
-              {TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Descrição</label>
-            <textarea
-              className="w-full border rounded-md p-2"
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Descrição da obra..."
-              disabled={saving}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Capa (URL)</label>
-            <input
-              className="w-full border rounded-md p-2"
-              value={coverUrl}
-              onChange={(e) => setCoverUrl(e.target.value)}
-              placeholder="https://..."
-              disabled={saving}
-            />
-          </div>
-
-          <button
-            className="w-full bg-black text-white rounded-md p-2 hover:opacity-90 disabled:opacity-60"
-            type="submit"
-            disabled={saving}
-          >
-            {saving ? "Criando..." : "Criar obra"}
-          </button>
-
-          {msg ? <p className="text-sm text-red-600">{msg}</p> : null}
-        </form>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
