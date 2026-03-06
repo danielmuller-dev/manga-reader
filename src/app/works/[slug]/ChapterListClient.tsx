@@ -29,6 +29,14 @@ type UrlState = {
   compact: boolean;
 };
 
+type Progress = {
+  chapterId: string;
+  mode: "SCROLL" | "PAGINATED";
+  pageIndex: number | null;
+  scrollY: number | null;
+  chapter?: { number: number | null; title: string | null } | null;
+};
+
 function chapterLabel(ch: { number: number | null; title: string | null }) {
   const base = ch.number != null ? `Cap. ${ch.number}` : "Capítulo";
   return `${base}${ch.title ? ` — ${ch.title}` : ""}`;
@@ -141,8 +149,19 @@ function selectGlass() {
   ].join(" ");
 }
 
+function progressToQueryString(progress: Progress): string {
+  if (progress.mode === "PAGINATED") return `?p=${progress.pageIndex ?? 0}`;
+  return `?s=${progress.scrollY ?? 0}`;
+}
+
+function progressWhere(progress: Progress): string {
+  if (progress.mode === "PAGINATED") return `Página ${(progress.pageIndex ?? 0) + 1}`;
+  return `Scroll ${progress.scrollY ?? 0}px`;
+}
+
 export default function ChapterListClient(props: {
   workSlug: string;
+  workId?: string; // ✅ opcional: se passar, habilita "Em andamento / Continuar" com base em /api/progress
   chapters: ChapterRowClient[];
   canManageChapters: boolean;
   initial?: Partial<UrlState>;
@@ -150,6 +169,42 @@ export default function ChapterListClient(props: {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [progressLoading, setProgressLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!props.workId) {
+        setProgress(null);
+        return;
+      }
+
+      setProgressLoading(true);
+      try {
+        const r = await fetch(`/api/progress?workId=${encodeURIComponent(props.workId)}`, {
+          cache: "no-store",
+        });
+
+        const data = (await r.json().catch(() => ({}))) as { progress?: Progress | null };
+        if (cancelled) return;
+
+        setProgress(data.progress ?? null);
+      } catch {
+        if (!cancelled) setProgress(null);
+      } finally {
+        if (!cancelled) setProgressLoading(false);
+      }
+    }
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.workId]);
 
   const initialFromUrl = useMemo<UrlState>(() => {
     const sp = new URLSearchParams(searchParams?.toString() ?? "");
@@ -329,6 +384,10 @@ export default function ChapterListClient(props: {
   const listPadding = compact ? "px-2 py-1.5" : "px-3 py-2";
   const textSize = compact ? "text-xs" : "text-sm";
 
+  const inProgressChapterId = progress?.chapterId ?? null;
+  const inProgressQs = progress ? progressToQueryString(progress) : "";
+  const inProgressWhere = progress ? progressWhere(progress) : null;
+
   return (
     <div className="space-y-4">
       {/* Controls */}
@@ -336,7 +395,11 @@ export default function ChapterListClient(props: {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-white/50">Scan:</span>
 
-          <select value={scanFilter} onChange={(e) => setScanFilter(e.target.value)} className={selectGlass()}>
+          <select
+            value={scanFilter}
+            onChange={(e) => setScanFilter(e.target.value)}
+            className={selectGlass()}
+          >
             <option value="ALL">Todas</option>
             {scanOptions.map((s) => (
               <option key={s.id} value={s.id}>
@@ -366,9 +429,24 @@ export default function ChapterListClient(props: {
             {compact ? "Compacto: ON" : "Compacto: OFF"}
           </button>
 
-          <button type="button" onClick={() => void copyCurrentLink()} className="btn-secondary" title="Copiar link com filtros">
-            {copyStatus === "COPIED" ? "Copiado!" : copyStatus === "ERROR" ? "Falhou :(" : "Copiar link"}
+          <button
+            type="button"
+            onClick={() => void copyCurrentLink()}
+            className="btn-secondary"
+            title="Copiar link com filtros"
+          >
+            {copyStatus === "COPIED"
+              ? "Copiado!"
+              : copyStatus === "ERROR"
+              ? "Falhou :("
+              : "Copiar link"}
           </button>
+
+          {props.workId ? (
+            <span className="text-xs text-white/50 ml-1">
+              {progressLoading ? "Progresso: carregando..." : progress ? "Progresso: ok" : "Progresso: —"}
+            </span>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
@@ -399,29 +477,49 @@ export default function ChapterListClient(props: {
               const rel = formatRelativeFromNow(d);
               const full = formatDateTimeBR(d);
 
+              const isInProgress = inProgressChapterId != null && c.id === inProgressChapterId;
+              const readHref = isInProgress ? `/read/${c.id}${inProgressQs}` : `/read/${c.id}`;
+              const readLabel = isInProgress ? "Continuar" : "Ler";
+              const progressHint = isInProgress && inProgressWhere ? ` • ${inProgressWhere}` : "";
+
               return (
                 <div
                   key={c.id}
                   className={[
                     "rounded-2xl border border-white/10 bg-black/20",
-                    "hover:bg-black/30 transition",
+                    isInProgress ? "ring-2 ring-white/15 bg-white/5" : "hover:bg-black/30",
+                    "transition",
                     compact ? "px-2 py-2" : "px-3 py-2",
                   ].join(" ")}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{chapterLabel(c)}</div>
+                      <div className="text-sm font-medium truncate">
+                        {chapterLabel(c)}
+                        {isInProgress ? (
+                          <span className="ml-2 align-middle inline-flex">
+                            <span className="chip">EM ANDAMENTO</span>
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/60">
                         <span className="chip">{scanName}</span>
                         <span className="chip">{kindBadge(c.kind, c.readMode)}</span>
                         <span className="text-white/45" title={full}>
                           {rel}
                         </span>
+                        {isInProgress && inProgressWhere ? (
+                          <span className="text-white/55">{inProgressWhere}</span>
+                        ) : null}
                       </div>
                     </div>
 
-                    <Link className="btn-primary shrink-0" href={`/read/${c.id}`} title={`Ler (${scanName})`}>
-                      Ler
+                    <Link
+                      className="btn-primary shrink-0"
+                      href={readHref}
+                      title={`${readLabel} (${scanName})${progressHint}`}
+                    >
+                      {readLabel}
                     </Link>
                   </div>
                 </div>
@@ -467,22 +565,31 @@ export default function ChapterListClient(props: {
                     const full = formatDateTimeBR(d);
                     const kind = kindBadge(c.kind, c.readMode);
 
+                    const isInProgress = inProgressChapterId != null && c.id === inProgressChapterId;
+                    const readHref = isInProgress ? `/read/${c.id}${inProgressQs}` : `/read/${c.id}`;
+                    const readLabel = isInProgress ? "Continuar" : "Ler";
+                    const progressHint = isInProgress && inProgressWhere ? ` • ${inProgressWhere}` : "";
+
                     return (
                       <li
                         key={c.id}
                         className={[
                           "grid grid-cols-12 gap-2",
                           listPadding,
-                          "bg-black/0 hover:bg-white/5 transition",
+                          isInProgress ? "bg-white/5" : "bg-black/0 hover:bg-white/5",
+                          "transition",
                         ].join(" ")}
                       >
                         <div className="col-span-5 min-w-0">
-                          <div className="text-sm font-medium truncate">
-                            {scanName}
-                            {c.title ? <span className="text-white/60"> • {c.title}</span> : null}
+                          <div className="text-sm font-medium truncate flex items-center gap-2">
+                            <span className="truncate">{scanName}</span>
+                            {isInProgress ? <span className="chip">EM ANDAMENTO</span> : null}
                           </div>
                           <div className={[textSize, "text-white/45 truncate"].join(" ")}>
                             {chapterLabel(c)}
+                            {isInProgress && inProgressWhere ? (
+                              <span className="text-white/55">{` • ${inProgressWhere}`}</span>
+                            ) : null}
                           </div>
                         </div>
 
@@ -497,8 +604,12 @@ export default function ChapterListClient(props: {
                         </div>
 
                         <div className="col-span-2 flex items-center justify-end gap-2">
-                          <Link className="btn-primary" href={`/read/${c.id}`} title={`Ler (${scanName})`}>
-                            Ler
+                          <Link
+                            className="btn-primary"
+                            href={readHref}
+                            title={`${readLabel} (${scanName})${progressHint}`}
+                          >
+                            {readLabel}
                           </Link>
 
                           {props.canManageChapters && <DeleteChapterButton chapterId={c.id} />}

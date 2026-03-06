@@ -155,7 +155,9 @@ export default async function WorkPage({
               <span className="text-xs text-white/50 truncate">/{work.slug}</span>
             </div>
 
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">{work.title}</h1>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+              {work.title}
+            </h1>
 
             {tags.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -183,7 +185,10 @@ export default async function WorkPage({
           <ContinueReading workId={work.id} />
 
           {canManageChapters ? (
-            <Link href={`/works/${work.slug}/chapters/new`} className="btn-secondary">
+            <Link
+              href={`/works/${work.slug}/chapters/new`}
+              className="btn-secondary"
+            >
               Adicionar capítulo
             </Link>
           ) : null}
@@ -214,7 +219,8 @@ export default async function WorkPage({
               </p>
 
               <div className="pt-2 text-xs text-white/50">
-                Dica: você pode ter várias versões do mesmo capítulo (ex: Cap. 12 — Reaper / Cap. 12 — Flame).
+                Dica: você pode ter várias versões do mesmo capítulo (ex: Cap.
+                12 — Reaper / Cap. 12 — Flame).
               </div>
             </div>
           </div>
@@ -241,12 +247,16 @@ export default async function WorkPage({
               </p>
             </div>
           ) : (
-            <ChapterListClient
-              workSlug={work.slug}
-              chapters={chapterRowsClient}
-              canManageChapters={canManageChapters}
-              initial={{ scan, q, sort, compact }}
-            />
+            <>
+              {/* habilita EM ANDAMENTO + CONTINUAR na lista */}
+              <ChapterListClient
+                workSlug={work.slug}
+                workId={work.id}
+                chapters={chapterRowsClient}
+                canManageChapters={canManageChapters}
+                initial={{ scan, q, sort, compact }}
+              />
+            </>
           )}
         </div>
       </div>

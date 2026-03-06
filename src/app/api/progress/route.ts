@@ -36,6 +36,14 @@ function toNullableInt(value: unknown): number | null {
   return Math.trunc(value);
 }
 
+function clampNonNegativeInt(n: number | null): number | null {
+  if (n === null) return null;
+  if (!Number.isFinite(n)) return null;
+  const v = Math.trunc(n);
+  if (v < 0) return 0;
+  return v;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const userId = await getUserId();
@@ -43,7 +51,9 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const workId = url.searchParams.get("workId");
-    if (!workId) return Response.json({ error: "workId é obrigatório." }, { status: 400 });
+    if (!workId) {
+      return Response.json({ error: "workId é obrigatório." }, { status: 400 });
+    }
 
     const progress = await prisma.readingProgress.findUnique({
       where: { userId_workId: { userId, workId } },
@@ -54,13 +64,19 @@ export async function GET(req: NextRequest) {
         pageIndex: true,
         scrollY: true,
         updatedAt: true,
+        chapter: {
+          select: {
+            number: true,
+            title: true,
+          },
+        },
       },
     });
 
     return Response.json({ progress: progress ?? null });
   } catch (err) {
     console.error("Erro em GET /api/progress:", err);
-    return Response.json({ error: "Erro interno. Veja o terminal." }, { status: 500 });
+    return Response.json({ error: "Erro interno." }, { status: 500 });
   }
 }
 
@@ -89,8 +105,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const pageIndex = toNullableInt(body.pageIndex);
-    const scrollY = toNullableInt(body.scrollY);
+    // Sanitiza valores
+    const rawPageIndex = clampNonNegativeInt(toNullableInt(body.pageIndex));
+    const rawScrollY = clampNonNegativeInt(toNullableInt(body.scrollY));
+
+    // Normaliza para evitar guardar ambos quando o modo muda
+    const pageIndex = mode === "PAGINATED" ? rawPageIndex : null;
+    const scrollY = mode === "SCROLL" ? rawScrollY : null;
 
     const progress = await prisma.readingProgress.upsert({
       where: { userId_workId: { userId, workId } },
@@ -115,12 +136,18 @@ export async function POST(req: NextRequest) {
         pageIndex: true,
         scrollY: true,
         updatedAt: true,
+        chapter: {
+          select: {
+            number: true,
+            title: true,
+          },
+        },
       },
     });
 
     return Response.json({ progress }, { status: 200 });
   } catch (err) {
     console.error("Erro em POST /api/progress:", err);
-    return Response.json({ error: "Erro interno. Veja o terminal." }, { status: 500 });
+    return Response.json({ error: "Erro interno." }, { status: 500 });
   }
 }

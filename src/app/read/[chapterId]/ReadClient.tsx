@@ -45,6 +45,8 @@ function formatChapterLabel(chapter: Chapter) {
   return `${num}${chapter.title ? ` — ${chapter.title}` : ""}`;
 }
 
+type ProgressMode = "SCROLL" | "PAGINATED";
+
 export default function ReadClient({ chapterId }: { chapterId: string }) {
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -58,7 +60,9 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
   const pendingScrollY = useRef<number | null>(null);
   const didRestoreScroll = useRef(false);
 
-  const lastSaved = useRef<{ pageIdx: number; scrollY: number }>({
+  // lastSaved: evita re-salvar o mesmo valor
+  const lastSaved = useRef<{ mode: ProgressMode | null; pageIdx: number; scrollY: number }>({
+    mode: null,
     pageIdx: -1,
     scrollY: -1,
   });
@@ -66,6 +70,10 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
   // UX: mostra/oculta topbar quando o usuário rola para baixo (modo cinema)
   const [compactTopbar, setCompactTopbar] = useState<boolean>(false);
   const lastScrollYForTopbar = useRef<number>(0);
+
+  // Debounce timers
+  const saveTimer = useRef<number | null>(null);
+  const latestScrollY = useRef<number>(0);
 
   const initialParams = useMemo(() => {
     if (typeof window === "undefined") {
@@ -87,6 +95,10 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
       setErr(null);
       setPrevChapterId(null);
       setNextChapterId(null);
+
+      // limpa estado de progresso local para evitar “carry” entre capítulos
+      lastSaved.current = { mode: null, pageIdx: -1, scrollY: -1 };
+      latestScrollY.current = 0;
 
       try {
         const r = await fetch(`/api/chapters/${chapterId}`, { cache: "no-store" });
@@ -206,51 +218,100 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
     if (nextChapterId) window.location.href = `/read/${nextChapterId}`;
   }
 
-  async function saveProgress(
-    mode: "SCROLL" | "PAGINATED",
-    pageIndex?: number | null,
-    scrollY?: number | null
-  ) {
+  async function saveProgress(mode: ProgressMode, pageIndex: number | null, scrollY: number | null) {
     if (!chapter) return;
 
-    await fetch("/api/progress", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workId: chapter.work.id,
-        chapterId: chapter.id,
-        mode,
-        pageIndex: pageIndex ?? null,
-        scrollY: scrollY ?? null,
-      }),
-    });
+    // Evita salvar valores repetidos
+    if (mode === "PAGINATED") {
+      if (lastSaved.current.mode === "PAGINATED" && lastSaved.current.pageIdx === (pageIndex ?? -1)) return;
+    } else {
+      if (lastSaved.current.mode === "SCROLL" && lastSaved.current.scrollY === (scrollY ?? -1)) return;
+    }
+
+    // Otimista: marca como salvo localmente antes do await pra reduzir spam
+    lastSaved.current.mode = mode;
+    if (mode === "PAGINATED") lastSaved.current.pageIdx = pageIndex ?? -1;
+    if (mode === "SCROLL") lastSaved.current.scrollY = scrollY ?? -1;
+
+    try {
+      await fetch("/api/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workId: chapter.work.id,
+          chapterId: chapter.id,
+          mode,
+          pageIndex,
+          scrollY,
+        }),
+      });
+    } catch {
+      // não quebra a leitura se falhar
+    }
   }
 
+  function scheduleSave(mode: ProgressMode, pageIndex: number | null, scrollY: number | null, delayMs: number) {
+    if (saveTimer.current != null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      void saveProgress(mode, pageIndex, scrollY);
+    }, delayMs);
+  }
+
+  function flushSaveNow() {
+    if (!chapter) return;
+
+    if (saveTimer.current != null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+
+    if (paginated) {
+      void saveProgress("PAGINATED", pageIdx, null);
+      return;
+    }
+
+    if (isScrollMode) {
+      const y = Math.floor(latestScrollY.current || window.scrollY || 0);
+      void saveProgress("SCROLL", null, y);
+    }
+  }
+
+  // PAGINATED: salva com debounce (melhor pra quem segura seta)
   useEffect(() => {
     if (!chapter) return;
     if (!paginated) return;
 
-    if (lastSaved.current.pageIdx === pageIdx) return;
-    lastSaved.current.pageIdx = pageIdx;
-
-    void saveProgress("PAGINATED", pageIdx, null);
+    scheduleSave("PAGINATED", pageIdx, null, 350);
+    return () => {
+      // não precisa limpar aqui; debounce global já é limpo no próximo schedule ou flush
+    };
   }, [pageIdx, chapter, paginated]);
 
+  // SCROLL/TEXT: salva em scroll com debounce + pausa quando aba não está visível
   useEffect(() => {
     if (!chapter) return;
     if (!isScrollMode) return;
 
-    const t = setInterval(() => {
+    function onScroll() {
+      // se aba não está visível, não fica salvando
+      if (document.visibilityState !== "visible") return;
+
       const y = Math.floor(window.scrollY || 0);
-      if (lastSaved.current.scrollY === y) return;
-      lastSaved.current.scrollY = y;
+      latestScrollY.current = y;
 
-      void saveProgress("SCROLL", null, y);
-    }, 2000);
+      // debounce um pouco maior pra reduzir chamadas
+      scheduleSave("SCROLL", null, y, 900);
+    }
 
-    return () => clearInterval(t);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, [chapter, isScrollMode]);
 
+  // Restaura scroll inicial
   useEffect(() => {
     if (!chapter) return;
     if (didRestoreScroll.current) return;
@@ -261,13 +322,37 @@ export default function ReadClient({ chapterId }: { chapterId: string }) {
       return;
     }
 
-    const t = setTimeout(() => {
+    const t = window.setTimeout(() => {
       window.scrollTo({ top: y, left: 0, behavior: "auto" });
+      latestScrollY.current = y;
       didRestoreScroll.current = true;
     }, 300);
 
-    return () => clearTimeout(t);
+    return () => window.clearTimeout(t);
   }, [chapter]);
+
+  // Salva ao sair / trocar de aba (garante “último estado”)
+  useEffect(() => {
+    if (!chapter) return;
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        flushSaveNow();
+      }
+    }
+
+    function onPageHide() {
+      flushSaveNow();
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [chapter, pageIdx, paginated, isScrollMode]);
 
   // Atalhos de teclado (mantém o comportamento atual)
   useEffect(() => {
